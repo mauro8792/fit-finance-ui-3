@@ -4,6 +4,9 @@ import { Toaster } from "@/components/ui/sonner";
 import { PWAPrompts } from "@/components/pwa/PWAPrompts";
 import "./globals.css";
 
+// Inicializar Sentry del lado del cliente
+import "../../sentry.client.config";
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],

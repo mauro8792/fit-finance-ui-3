@@ -177,68 +177,48 @@ export default function RoutinePage() {
           </CardContent>
         </Card>
 
-        {/* Microcycle Navigation */}
-        <div className="flex items-center justify-between gap-2">
+        {/* Microcycle Navigation - Simplified */}
+        <div className="flex items-center justify-between gap-4">
           <Button
             variant="outline"
             size="icon"
-            className="h-10 w-10"
+            className="h-10 w-10 shrink-0"
             onClick={goToPrevMicro}
             disabled={selectedMicroIndex === 0}
           >
             <ChevronLeft className="w-5 h-5" />
           </Button>
 
-          {/* Microcycle Selector Pills */}
-          <div className="flex-1 flex justify-center gap-1 overflow-x-auto py-1">
-            {activeMeso.microcycles?.slice(
-              Math.max(0, selectedMicroIndex - 2),
-              Math.min(activeMeso.microcycles.length, selectedMicroIndex + 3)
-            ).map((micro, idx) => {
-              const realIndex = Math.max(0, selectedMicroIndex - 2) + idx;
-              const isSelected = realIndex === selectedMicroIndex;
-              
-              return (
-                <Button
-                  key={micro.id}
-                  variant={isSelected ? "default" : "outline"}
-                  size="sm"
-                  className={cn(
-                    "min-w-[50px] px-3",
-                    isSelected && "bg-primary text-black"
-                  )}
-                  onClick={() => updateMicroInUrl(realIndex)}
-                >
-                  M{realIndex + 1}
-                </Button>
-              );
-            })}
+          {/* Current Microcycle Display */}
+          <div className="flex-1 text-center">
+            <p className="font-semibold text-text">
+              Microciclo {selectedMicroIndex + 1}
+              <span className="text-text-muted font-normal ml-2">
+                de {activeMeso.microcycles?.length || 0}
+              </span>
+            </p>
+            {currentMicro && (
+              <p className="text-sm text-text-muted flex items-center justify-center gap-2">
+                {currentMicro.name}
+                {currentMicro.isDeload && (
+                  <Badge variant="outline" className="text-xs">
+                    Descarga
+                  </Badge>
+                )}
+              </p>
+            )}
           </div>
 
           <Button
             variant="outline"
             size="icon"
-            className="h-10 w-10"
+            className="h-10 w-10 shrink-0"
             onClick={goToNextMicro}
             disabled={!activeMeso.microcycles || selectedMicroIndex >= activeMeso.microcycles.length - 1}
           >
             <ChevronRight className="w-5 h-5" />
           </Button>
         </div>
-
-        {/* Current Microcycle Info */}
-        {currentMicro && (
-          <div className="text-center py-2">
-            <p className="text-sm text-text-muted">
-              {currentMicro.name}
-              {currentMicro.isDeload && (
-                <Badge variant="outline" className="ml-2 text-xs">
-                  Descarga
-                </Badge>
-              )}
-            </p>
-          </div>
-        )}
 
         {/* Days Grid */}
         <div className="space-y-2">

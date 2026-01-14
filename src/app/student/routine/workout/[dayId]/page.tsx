@@ -111,6 +111,7 @@ export default function WorkoutPage() {
     set: Set;
     exercise: Exercise;
     load: string;
+    reps: string;
     actualRir: string;
     actualRpe: string;
     notes: string;
@@ -243,6 +244,7 @@ export default function WorkoutPage() {
       set,
       exercise,
       load: set.load?.toString() || "",
+      reps: set.reps?.toString() || "",
       actualRir: set.actualRir?.toString() || "",
       actualRpe: set.actualRpe?.toString() || "",
       notes: set.notes || "",
@@ -256,6 +258,7 @@ export default function WorkoutPage() {
     try {
       const payload = {
         load: parseFloat(editingSet.load) || 0,
+        reps: editingSet.reps || null,
         actualRir: editingSet.actualRir ? parseInt(editingSet.actualRir) : null,
         actualRpe: editingSet.actualRpe ? parseInt(editingSet.actualRpe) : null,
         notes: editingSet.notes || null,
@@ -528,7 +531,8 @@ export default function WorkoutPage() {
                   Reps: {editingSet.set.reps} · RIR esperado: {editingSet.set.expectedRir || "—"}
                 </p>
               </div>
-              <div className="grid grid-cols-3 gap-3 mb-6">
+              {/* Primera fila: CARGA y REPS */}
+              <div className="grid grid-cols-2 gap-3 mb-3">
                 <div>
                   <label className="text-xs text-text-muted mb-1 block text-center">CARGA (kg)</label>
                   <Input
@@ -541,6 +545,22 @@ export default function WorkoutPage() {
                     placeholder="0"
                   />
                 </div>
+                <div>
+                  <label className="text-xs text-text-muted mb-1 block text-center">REPS</label>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min="0"
+                    max="100"
+                    value={editingSet.reps}
+                    onChange={(e) => setEditingSet({ ...editingSet, reps: e.target.value })}
+                    className="text-center text-xl font-bold h-14 bg-accent/10 border-accent/30"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+              {/* Segunda fila: RIR y RPE */}
+              <div className="grid grid-cols-2 gap-3 mb-6">
                 <div>
                   <label className="text-xs text-text-muted mb-1 block text-center">RIR Real</label>
                   <Input

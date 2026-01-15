@@ -344,10 +344,18 @@ export default function CardioPage() {
           <Button
             variant="outline"
             className="h-auto py-4 flex flex-col items-center gap-2 bg-surface/50 border-border hover:bg-surface"
+            onClick={() => router.push("/student/cardio/calendar")}
+          >
+            <Calendar className="w-6 h-6 text-accent" />
+            <span className="text-sm">Ver calendario</span>
+          </Button>
+          <Button
+            variant="outline"
+            className="h-auto py-4 flex flex-col items-center gap-2 bg-surface/50 border-border hover:bg-surface col-span-2"
             onClick={() => router.push("/student/cardio/add-activity")}
           >
             <Plus className="w-6 h-6 text-accent" />
-            <span className="text-sm">Agregar manual</span>
+            <span className="text-sm">Agregar actividad manual</span>
           </Button>
         </div>
 

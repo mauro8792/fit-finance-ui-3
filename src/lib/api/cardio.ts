@@ -254,6 +254,45 @@ export const addSteps = async (studentId: number, data: { steps: number; date: s
 // Alias para compatibilidad
 export const addManualSteps = addSteps;
 
+// Obtener pasos de un mes completo (para el calendario)
+export interface MonthlyStepsData {
+  date: string; // yyyy-mm-dd
+  steps: number;
+  id: number;
+}
+
+export const getMonthlySteps = async (studentId: number, year: number, month: number): Promise<MonthlyStepsData[]> => {
+  try {
+    // Obtener primer y último día del mes
+    const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const endDate = `${year}-${String(month).padStart(2, "0")}-${lastDay}`;
+    
+    const response = await api.get(`/cardio/${studentId}`, { 
+      params: { startDate, endDate, limit: 100 } 
+    });
+    
+    let logs = [];
+    if (Array.isArray(response.data)) {
+      logs = response.data;
+    } else if (response.data?.value && Array.isArray(response.data.value)) {
+      logs = response.data.value;
+    }
+    
+    // Filtrar solo los registros de tipo 'walk' (pasos) y mapear
+    return logs
+      .filter((log: any) => log?.activityType === 'walk' && log?.steps > 0)
+      .map((log: any) => ({
+        date: typeof log.date === 'string' ? log.date.split('T')[0] : '',
+        steps: Number(log.steps) || 0,
+        id: log.id,
+      }));
+  } catch (error) {
+    console.error('Error fetching monthly steps:', error);
+    return [];
+  }
+};
+
 // Obtener pasos de una fecha específica (si existe)
 export const getStepsByDate = async (studentId: number, date: string): Promise<{ steps: number; id: number } | null> => {
   try {

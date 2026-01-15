@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { useAuthStore } from "@/stores/auth-store";
 import { addManualSteps, getStepsByDate } from "@/lib/api/cardio";
@@ -35,12 +35,29 @@ const parseDisplayDate = (displayDate: string): string => {
 
 export default function AddStepsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { student } = useAuthStore();
+  
+  // Leer fecha de URL o usar hoy
+  const dateFromUrl = searchParams.get("date");
+  const initialDate = dateFromUrl && /^\d{4}-\d{2}-\d{2}$/.test(dateFromUrl) 
+    ? dateFromUrl 
+    : getTodayString();
+  
   const [steps, setSteps] = useState(0);
-  const [dateDisplay, setDateDisplay] = useState(formatDateForDisplay(getTodayString()));
+  const [dateDisplay, setDateDisplay] = useState(formatDateForDisplay(initialDate));
   const [saving, setSaving] = useState(false);
   const [existingRecord, setExistingRecord] = useState<{ steps: number; id: number } | null>(null);
   const [checkingExisting, setCheckingExisting] = useState(false);
+  const dateInputRef = useRef<HTMLInputElement>(null);
+  const [initialized, setInitialized] = useState(false);
+
+  // Actualizar fecha si cambia el parámetro URL
+  useEffect(() => {
+    if (dateFromUrl && /^\d{4}-\d{2}-\d{2}$/.test(dateFromUrl)) {
+      setDateDisplay(formatDateForDisplay(dateFromUrl));
+    }
+  }, [dateFromUrl]);
 
   // Verificar si existe un registro para la fecha seleccionada
   const checkExistingRecord = useCallback(async (isoDate: string, studentId: number) => {
@@ -51,13 +68,17 @@ export default function AddStepsPage() {
       if (existing && existing.steps > 0) {
         // Precargar los pasos existentes
         setSteps(existing.steps);
+      } else if (initialized) {
+        // Solo resetear si ya se inicializó (para evitar flicker)
+        setSteps(0);
       }
     } catch (error) {
       console.error("Error checking existing record:", error);
     } finally {
       setCheckingExisting(false);
+      setInitialized(true);
     }
-  }, []);
+  }, [initialized]);
 
   // Verificar al montar y cuando cambia la fecha o el student
   useEffect(() => {
@@ -91,7 +112,8 @@ export default function AddStepsPage() {
         ? `¡Pasos actualizados a ${steps.toLocaleString()}! 📊` 
         : `¡${steps.toLocaleString()} pasos registrados! 🎉`
       );
-      router.push("/student/cardio");
+      // Volver al calendario o a cardio según de dónde vino
+      router.push(dateFromUrl ? "/student/cardio/calendar" : "/student/cardio");
     } catch (error) {
       console.error("Error adding steps:", error);
       toast.error("Error al registrar los pasos");
@@ -100,9 +122,12 @@ export default function AddStepsPage() {
     }
   };
 
+  // Determinar a dónde volver
+  const backHref = dateFromUrl ? "/student/cardio/calendar" : "/student/cardio";
+
   return (
     <div className="min-h-screen bg-background pb-24">
-      <PageHeader title="Cargar pasos" backHref="/student/progress?tab=steps" />
+      <PageHeader title="Cargar pasos" backHref={backHref} />
 
       <div className="px-4 py-4 space-y-6">
         {/* Steps Input */}
@@ -174,8 +199,7 @@ export default function AddStepsPage() {
         <Card className="bg-surface/80 border-border">
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-2">
-              <Label className="flex items-center gap-2 text-text-muted">
-                <Calendar className="w-4 h-4" />
+              <Label className="text-text-muted">
                 Fecha
               </Label>
               {checkingExisting && (
@@ -188,31 +212,29 @@ export default function AddStepsPage() {
                 </Badge>
               )}
             </div>
-            <Input
-              type="text"
-              value={dateDisplay}
-              onChange={(e) => {
-                // Allow typing in dd/mm/yyyy format
-                const value = e.target.value;
-                // Auto-add slashes
-                let formatted = value.replace(/\D/g, "");
-                if (formatted.length > 2) {
-                  formatted = formatted.slice(0, 2) + "/" + formatted.slice(2);
-                }
-                if (formatted.length > 5) {
-                  formatted = formatted.slice(0, 5) + "/" + formatted.slice(5, 9);
-                }
-                // Limpiar pasos al cambiar fecha
-                if (formatted !== dateDisplay) {
-                  setSteps(0);
-                  setExistingRecord(null);
-                }
-                setDateDisplay(formatted);
-              }}
-              placeholder="dd/mm/aaaa"
-              maxLength={10}
-              className="bg-background"
-            />
+            <div 
+              className="relative flex items-center bg-background border border-border rounded-md px-3 py-2 cursor-pointer hover:border-primary transition-colors"
+              onClick={() => dateInputRef.current?.showPicker()}
+            >
+              <Calendar className="w-5 h-5 text-primary mr-3" />
+              <span className="text-text flex-1">{dateDisplay}</span>
+              {/* Input oculto para el selector de fecha nativo */}
+              <input
+                ref={dateInputRef}
+                type="date"
+                value={parseDisplayDate(dateDisplay)}
+                onChange={(e) => {
+                  if (e.target.value) {
+                    // Limpiar pasos al cambiar la fecha para que se recargue
+                    setSteps(0);
+                    setExistingRecord(null);
+                    setDateDisplay(formatDateForDisplay(e.target.value));
+                  }
+                }}
+                max={getTodayString()}
+                className="absolute inset-0 opacity-0 cursor-pointer"
+              />
+            </div>
             {existingRecord && (
               <p className="text-xs text-text-muted mt-2">
                 💡 Ya tenés un registro para esta fecha. Se actualizará con el nuevo valor.

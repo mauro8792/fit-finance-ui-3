@@ -271,7 +271,7 @@ export default function ProgressPage() {
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => router.push(activeTab === "steps" ? "/student/cardio/add-steps" : "/student/progress/add-weight")}
+            onClick={() => router.push(activeTab === "steps" ? "/student/cardio/calendar" : "/student/progress/add-weight")}
             className="text-primary"
           >
             <Plus className="w-4 h-4 mr-1" />

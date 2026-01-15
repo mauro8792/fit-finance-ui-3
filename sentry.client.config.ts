@@ -16,11 +16,6 @@ Sentry.init({
   // Capture 100% of errors
   sampleRate: 1.0,
 
-  // Integrations for browser tracing
-  integrations: [
-    Sentry.browserTracingIntegration(),
-  ],
-
   // Set `tracePropagationTargets` to control for which URLs trace propagation should be enabled
   tracePropagationTargets: [
     "localhost",

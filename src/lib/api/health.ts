@@ -64,28 +64,164 @@ export const updateWeightGoal = async (studentId: number, weeklyGoal: number) =>
 
 // ========== ANTHROPOMETRY ==========
 
-export const getAnthropometry = async (studentId: number) => {
-  const { data } = await api.get(`/health/anthropometry/${studentId}`);
+export type AnthropometryStatus = 'draft' | 'published';
+
+export interface AnthropometryInput {
+  date: string;
+  status?: AnthropometryStatus;
+  // Datos básicos
+  weight?: number;
+  heightCm?: number;
+  // Perímetros (cm)
+  perimetroCabeza?: number;
+  perimetroBrazoRelajado?: number;
+  perimetroBrazoContraido?: number;
+  perimetroAntebrazo?: number;
+  perimetroTorax?: number;
+  perimetroCintura?: number;
+  perimetroCaderas?: number;
+  perimetroMusloSuperior?: number;
+  perimetroMusloMedial?: number;
+  perimetroPantorrilla?: number;
+  // Pliegues (mm)
+  plieguePantorrilla?: number;
+  pliegueTriceps?: number;
+  pliegueSubescapular?: number;
+  pliegueSupraespinal?: number;
+  pliegueAbdominal?: number;
+  pliegueMusloMedial?: number;
+  // Fotos (URLs o base64 para upload)
+  photoFront?: string;
+  photoSide?: string;
+  photoBack?: string;
+  // Composición corporal (carga manual)
+  tejidoMuscularKg?: number;
+  tejidoMuscularPct?: number;
+  tejidoAdiposoKg?: number;
+  tejidoAdipodoPct?: number;
+  notes?: string;
+}
+
+export interface Anthropometry extends AnthropometryInput {
+  id: number;
+  studentId?: number;
+  // Valores calculados
+  sumaPliegues?: number;
+  porcentajeGrasa?: number;
+  porcentajeMuscular?: number;
+  masaGrasaKg?: number;
+  masaMagraKg?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/**
+ * Obtener historial de antropometría de un estudiante
+ * @param studentId - ID del estudiante
+ * @param includeDrafts - Si true, incluye borradores. Por defecto false (solo publicados)
+ */
+export const getAnthropometryHistory = async (studentId: number, includeDrafts = false): Promise<Anthropometry[]> => {
+  try {
+    const { data } = await api.get(`/health/anthropometry/${studentId}?includeDrafts=${includeDrafts}`);
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching anthropometry:', error);
+    return [];
+  }
+};
+
+/**
+ * Obtener el borrador pendiente de un estudiante (si existe)
+ */
+export const getDraftAnthropometry = async (studentId: number): Promise<Anthropometry | null> => {
+  try {
+    const { data } = await api.get(`/health/anthropometry/${studentId}/draft`);
+    return data;
+  } catch (error) {
+    console.error('Error fetching draft:', error);
+    return null;
+  }
+};
+
+/**
+ * Obtener detalle de una medición específica
+ */
+export const getAnthropometryById = async (id: number): Promise<Anthropometry> => {
+  const { data } = await api.get(`/health/anthropometry/detail/${id}`);
   return data;
 };
 
+/**
+ * Crear nueva medición de antropometría
+ * Soporta fotos en base64 que se suben a Cloudinary
+ */
 export const addAnthropometry = async (
   studentId: number,
-  measurements: {
-    chest?: number;
-    waist?: number;
-    hips?: number;
-    leftArm?: number;
-    rightArm?: number;
-    leftThigh?: number;
-    rightThigh?: number;
-    leftCalf?: number;
-    rightCalf?: number;
-    notes?: string;
-  }
-) => {
+  measurements: AnthropometryInput
+): Promise<Anthropometry> => {
   const { data } = await api.post(`/health/anthropometry/${studentId}`, measurements);
   return data;
+};
+
+/**
+ * Actualizar medición existente
+ */
+export const updateAnthropometry = async (
+  id: number,
+  measurements: Partial<AnthropometryInput>
+): Promise<Anthropometry> => {
+  const { data } = await api.put(`/health/anthropometry/${id}`, measurements);
+  return data;
+};
+
+/**
+ * Publicar una medición (cambiar de draft a published)
+ */
+export const publishAnthropometry = async (id: number): Promise<Anthropometry> => {
+  const { data } = await api.post(`/health/anthropometry/${id}/publish`);
+  return data;
+};
+
+/**
+ * Eliminar medición
+ */
+export const deleteAnthropometry = async (id: number) => {
+  const { data } = await api.delete(`/health/anthropometry/${id}`);
+  return data;
+};
+
+// ========== MOCK DATA (temporal hasta conectar backend) ==========
+export const getMockAnthropometryHistory = (): any[] => {
+  return [
+    {
+      id: 1,
+      date: '2026-01-10',
+      weight: 78.5,
+      perimetroBrazoContraido: 35.5,
+      perimetroCintura: 82,
+      perimetroCaderas: 98,
+      perimetroMusloSuperior: 58,
+      photoFront: '/mock/progress-front-1.jpg',
+      photoSide: '/mock/progress-side-1.jpg',
+      photoBack: null,
+      porcentajeGrasa: 15.2,
+      masaMagraKg: 66.6,
+    },
+    {
+      id: 2,
+      date: '2025-12-15',
+      weight: 79.8,
+      perimetroBrazoContraido: 34.8,
+      perimetroCintura: 84,
+      perimetroCaderas: 99,
+      perimetroMusloSuperior: 57,
+      photoFront: '/mock/progress-front-2.jpg',
+      photoSide: null,
+      photoBack: '/mock/progress-back-2.jpg',
+      porcentajeGrasa: 16.5,
+      masaMagraKg: 66.6,
+    },
+  ];
 };
 
 // ========== DASHBOARD ==========

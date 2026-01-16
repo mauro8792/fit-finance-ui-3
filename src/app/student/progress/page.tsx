@@ -29,6 +29,8 @@ import {
   Trash2,
   Check,
   X,
+  Ruler,
+  Camera,
 } from "lucide-react";
 import { cn, formatDate, parseLocalDate } from "@/lib/utils";
 import {
@@ -498,6 +500,27 @@ export default function ProgressPage() {
                     </CardContent>
                   </Card>
                 )}
+
+                {/* Card de Antropometría */}
+                <Card 
+                  className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 border-purple-500/30 cursor-pointer hover:border-purple-500/50 transition-colors"
+                  onClick={() => router.push("/student/progress/measurements")}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-full bg-purple-500/30 flex items-center justify-center">
+                          <Camera className="w-6 h-6 text-purple-400" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-text">Antropometría</p>
+                          <p className="text-xs text-text-muted">Historial de mediciones y fotos de progreso</p>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-purple-400" />
+                    </div>
+                  </CardContent>
+                </Card>
               </motion.div>
             )}
           </TabsContent>

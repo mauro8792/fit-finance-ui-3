@@ -241,6 +241,48 @@ export interface WeightLog {
   notes?: string;
 }
 
+export interface Anthropometry {
+  id: number;
+  studentId: number;
+  date: string;
+  weight?: number;
+  
+  // Perímetros (cm)
+  perimetroBrazoRelajado?: number;
+  perimetroBrazoContraido?: number;
+  perimetroAntebrazo?: number;
+  perimetroTorax?: number;
+  perimetroCintura?: number;
+  perimetroCaderas?: number;
+  perimetroMusloSuperior?: number;
+  perimetroMusloMedial?: number;
+  perimetroPantorrilla?: number;
+  
+  // Pliegues cutáneos (mm)
+  plieguePantorrilla?: number;
+  pliegueTriceps?: number;
+  pliegueSubescapular?: number;
+  pliegueSupraespinal?: number;
+  pliegueAbdominal?: number;
+  pliegueMusloMedial?: number;
+  sumaPliegues?: number;
+  
+  // Composición corporal (calculada)
+  porcentajeGrasa?: number;
+  porcentajeMuscular?: number;
+  masaGrasaKg?: number;
+  masaMagraKg?: number;
+  
+  // Fotos (URLs de Cloudinary)
+  photoFront?: string;
+  photoSide?: string;
+  photoBack?: string;
+  
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface WeightStats {
   currentWeight: number | null;
   initialWeight: number | null;

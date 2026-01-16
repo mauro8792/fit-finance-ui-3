@@ -397,7 +397,7 @@ export default function TemplateEditPage() {
                           ...d.exercises,
                           {
                             ...newExercise,
-                            id: data.exercise?.id || data.id,
+                            id: data.exerciseId || data.exercise?.id || data.id,
                             exerciseCatalog: catalogExercise,
                             sets: data.exercise?.sets || newExercise.sets,
                           },

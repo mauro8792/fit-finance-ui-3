@@ -41,9 +41,10 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  AreaChart,
-  Area,
+  BarChart,
+  Bar,
   ReferenceLine,
+  Cell,
 } from "recharts";
 import type { DashboardSummary, WeightLog } from "@/types";
 import { WeeklyCorrelationDashboard } from "@/components/charts/WeeklyCorrelationDashboard";
@@ -67,6 +68,8 @@ export default function ProgressPage() {
   const [editingDate, setEditingDate] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>("");
   const [savingEdit, setSavingEdit] = useState(false);
+  const [isStepsChartHovered, setIsStepsChartHovered] = useState(false);
+  const [activeBarIndex, setActiveBarIndex] = useState<number | undefined>(undefined);
 
   // Edit weight state
   const [editingWeightId, setEditingWeightId] = useState<number | null>(null);
@@ -603,16 +606,42 @@ export default function ProgressPage() {
                     )}
                   </CardHeader>
                   <CardContent className="p-2">
-                    <div className="h-48 relative">
+                    <div 
+                      className="h-48 w-full relative outline-none focus:outline-none [&_svg]:outline-none [&_*]:outline-none"
+                      style={{ WebkitTapHighlightColor: 'transparent' }}
+                      onMouseEnter={() => setIsStepsChartHovered(true)}
+                      onMouseLeave={() => {
+                        setIsStepsChartHovered(false);
+                        setActiveBarIndex(undefined);
+                      }}
+                      onTouchStart={() => setIsStepsChartHovered(true)}
+                      onTouchEnd={() => {
+                        // Delay para permitir que se muestre el tooltip antes de ocultarlo
+                        setTimeout(() => {
+                          setIsStepsChartHovered(false);
+                          setActiveBarIndex(undefined);
+                        }, 2000);
+                      }}
+                    >
                       {loadingSteps && (
                         <div className="absolute inset-0 bg-background/50 flex items-center justify-center z-10">
                           <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                         </div>
                       )}
                       {stepsChartData.length > 0 ? (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart data={stepsChartData}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                        <ResponsiveContainer width="100%" height={192} debounce={50}>
+                          <BarChart 
+                            data={stepsChartData} 
+                            barCategoryGap="20%"
+                            style={{ outline: 'none' }}
+                            onMouseMove={(state) => {
+                              if (state && state.activeTooltipIndex !== undefined) {
+                                setActiveBarIndex(state.activeTooltipIndex);
+                              }
+                            }}
+                            onMouseLeave={() => setActiveBarIndex(undefined)}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" vertical={false} horizontal={true} />
                             <XAxis
                               dataKey="date"
                               tick={{ fontSize: 10, fill: "#94a3b8" }}
@@ -626,13 +655,21 @@ export default function ProgressPage() {
                               width={40}
                             />
                             <Tooltip
-                              contentStyle={{
-                                background: "#1a1a2e",
-                                border: "1px solid rgba(255,255,255,0.1)",
-                                borderRadius: "8px",
+                              active={isStepsChartHovered && activeBarIndex !== undefined}
+                              content={({ payload, label }) => {
+                                // Solo mostrar si el usuario está realmente haciendo hover
+                                if (!isStepsChartHovered || activeBarIndex === undefined || !payload || payload.length === 0) return null;
+                                const value = payload[0]?.value;
+                                return (
+                                  <div className="bg-[#1a1a2e] border border-white/10 rounded-lg px-3 py-2 shadow-lg">
+                                    <p className="text-text-muted text-xs">{label}</p>
+                                    <p className="text-accent font-medium">
+                                      pasos: {typeof value === 'number' ? value.toLocaleString() : value}
+                                    </p>
+                                  </div>
+                                );
                               }}
-                              labelStyle={{ color: "#94a3b8" }}
-                              formatter={(value) => typeof value === 'number' ? value.toLocaleString() : value}
+                              cursor={false}
                             />
                             <ReferenceLine
                               y={stepsStats?.dailyGoal || summary?.steps?.dailyGoal || 0}
@@ -645,20 +682,22 @@ export default function ProgressPage() {
                                 position: "right",
                               }}
                             />
-                            <Area
-                              type="monotone"
+                            <Bar
                               dataKey="pasos"
-                              stroke="#4cceac"
-                              fill="url(#stepsGradient)"
-                              strokeWidth={2}
-                            />
-                            <defs>
-                              <linearGradient id="stepsGradient" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#4cceac" stopOpacity={0.3} />
-                                <stop offset="95%" stopColor="#4cceac" stopOpacity={0} />
-                              </linearGradient>
-                            </defs>
-                          </AreaChart>
+                              radius={[4, 4, 0, 0]}
+                            >
+                              {stepsChartData.map((entry: any, index: number) => {
+                                const goal = stepsStats?.dailyGoal || summary?.steps?.dailyGoal || 8000;
+                                const reachedGoal = entry.pasos >= goal;
+                                return (
+                                  <Cell 
+                                    key={`cell-${index}`} 
+                                    fill={reachedGoal ? "#4cceac" : "#4cceac80"}
+                                  />
+                                );
+                              })}
+                            </Bar>
+                          </BarChart>
                         </ResponsiveContainer>
                       ) : (
                         <div className="h-full flex items-center justify-center text-text-muted">

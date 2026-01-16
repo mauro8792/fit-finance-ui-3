@@ -136,23 +136,24 @@ export default function StepsCalendarPage() {
 
   return (
     <div className="min-h-screen bg-background pb-24">
-      <PageHeader title="Calendario de Pasos" backHref="/student/cardio" />
+      <PageHeader title="Calendario de Pasos" backHref="/student/progress?tab=steps" />
 
-      <div className="px-4 py-4 space-y-4">
-        {/* Month Navigation */}
+      <div className="px-4 py-3 space-y-3">
+        {/* Calendar Card - Month Navigation + Grid */}
         <Card className="bg-surface/80 border-border">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
+          <CardContent className="p-3">
+            {/* Month Navigation */}
+            <div className="flex items-center justify-between mb-3">
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={handlePrevMonth}
-                className="w-10 h-10"
+                className="w-8 h-8"
               >
-                <ChevronLeft className="w-5 h-5" />
+                <ChevronLeft className="w-4 h-4" />
               </Button>
 
-              <h2 className="text-lg font-semibold text-text">
+              <h2 className="text-base font-semibold text-text">
                 {MONTHS[month - 1]} {year}
               </h2>
 
@@ -161,23 +162,17 @@ export default function StepsCalendarPage() {
                 size="icon"
                 onClick={handleNextMonth}
                 disabled={isCurrentMonth}
-                className="w-10 h-10"
+                className="w-8 h-8"
               >
-                <ChevronRight className="w-5 h-5" />
+                <ChevronRight className="w-4 h-4" />
               </Button>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Calendar Grid */}
-        <Card className="bg-surface/80 border-border">
-          <CardContent className="p-4">
             {/* Days of Week Header */}
-            <div className="grid grid-cols-7 gap-1 mb-2">
+            <div className="grid grid-cols-7 gap-0.5 mb-1">
               {DAYS_OF_WEEK.map((day) => (
                 <div
                   key={day}
-                  className="text-center text-xs font-medium text-text-muted py-2"
+                  className="text-center text-[10px] font-medium text-text-muted py-1"
                 >
                   {day}
                 </div>
@@ -186,11 +181,11 @@ export default function StepsCalendarPage() {
 
             {/* Calendar Days */}
             {loading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-primary" />
               </div>
             ) : (
-              <div className="grid grid-cols-7 gap-1">
+              <div className="grid grid-cols-7 gap-0.5">
                 {calendarDays.map((item, index) => {
                   const hasSteps = item.date ? stepsMap.has(item.date) : false;
                   const stepsInfo = item.date ? stepsMap.get(item.date) : null;
@@ -204,17 +199,17 @@ export default function StepsCalendarPage() {
                       onClick={() => handleDayClick(item.date)}
                       disabled={!item.day || isFuture}
                       className={cn(
-                        "relative aspect-square flex flex-col items-center justify-center rounded-lg transition-all",
+                        "relative aspect-square flex flex-col items-center justify-center rounded-md transition-all",
                         !item.day && "invisible",
                         item.day && !isFuture && "hover:bg-surface cursor-pointer",
                         isFuture && "opacity-30 cursor-not-allowed",
-                        isToday && "ring-2 ring-primary ring-offset-2 ring-offset-background",
+                        isToday && "ring-2 ring-primary ring-offset-1 ring-offset-background",
                         hasSteps && "bg-primary/20"
                       )}
                     >
                       <span
                         className={cn(
-                          "text-sm font-medium",
+                          "text-xs font-medium",
                           isToday ? "text-primary" : hasSteps ? "text-primary" : "text-text",
                           isFuture && "text-text-muted"
                         )}
@@ -222,16 +217,9 @@ export default function StepsCalendarPage() {
                         {item.day}
                       </span>
 
-                      {/* Indicador de pasos */}
-                      {hasSteps && (
-                        <div className="absolute bottom-1">
-                          <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                        </div>
-                      )}
-
-                      {/* Tooltip con cantidad de pasos */}
+                      {/* Indicador de pasos con cantidad */}
                       {stepsInfo && (
-                        <span className="absolute -bottom-0.5 text-[8px] text-primary font-medium">
+                        <span className="text-[7px] text-primary font-medium leading-none">
                           {stepsInfo.steps >= 1000 
                             ? `${(stepsInfo.steps / 1000).toFixed(0)}k` 
                             : stepsInfo.steps
@@ -245,67 +233,50 @@ export default function StepsCalendarPage() {
             )}
 
             {/* Instrucción */}
-            <p className="text-center text-xs text-text-muted mt-4 px-2">
+            <p className="text-center text-[10px] text-text-muted mt-2">
               👆 Tocá un día para cargar o editar los pasos
             </p>
           </CardContent>
         </Card>
 
-        {/* Monthly Stats */}
+        {/* Monthly Stats - Compact */}
         <Card className="bg-surface/80 border-border">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                <Footprints className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-text">Resumen del mes</h3>
-                <p className="text-xs text-text-muted">
-                  {MONTHS[month - 1]} {year}
-                </p>
-              </div>
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Footprints className="w-4 h-4 text-primary" />
+              <span className="text-sm font-medium text-text">Resumen del mes</span>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-background rounded-lg p-3 text-center">
-                <p className="text-2xl font-bold text-primary">
-                  {monthStats.totalSteps.toLocaleString()}
+            <div className="grid grid-cols-3 gap-2">
+              <div className="bg-background rounded-lg p-2 text-center">
+                <p className="text-lg font-bold text-primary">
+                  {monthStats.totalSteps >= 1000 
+                    ? `${(monthStats.totalSteps / 1000).toFixed(1)}k`
+                    : monthStats.totalSteps
+                  }
                 </p>
-                <p className="text-xs text-text-muted">Pasos totales</p>
+                <p className="text-[10px] text-text-muted">Total</p>
               </div>
 
-              <div className="bg-background rounded-lg p-3 text-center">
-                <p className="text-2xl font-bold text-text">
+              <div className="bg-background rounded-lg p-2 text-center">
+                <p className="text-lg font-bold text-text">
                   {monthStats.daysWithSteps}/{monthStats.daysElapsed}
                 </p>
-                <p className="text-xs text-text-muted">Días registrados</p>
+                <p className="text-[10px] text-text-muted">Días</p>
               </div>
 
-              <div className="bg-background rounded-lg p-3 text-center col-span-2">
-                <p className="text-2xl font-bold text-text">
-                  {monthStats.avgSteps.toLocaleString()}
+              <div className="bg-background rounded-lg p-2 text-center">
+                <p className="text-lg font-bold text-text">
+                  {monthStats.avgSteps >= 1000 
+                    ? `${(monthStats.avgSteps / 1000).toFixed(1)}k`
+                    : monthStats.avgSteps
+                  }
                 </p>
-                <p className="text-xs text-text-muted">Promedio diario</p>
+                <p className="text-[10px] text-text-muted">Promedio</p>
               </div>
             </div>
           </CardContent>
         </Card>
-
-        {/* Legend */}
-        <div className="flex items-center justify-center gap-6 text-xs text-text-muted">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-primary/20 border-2 border-primary" />
-            <span>Con pasos</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full border-2 border-text-muted" />
-            <span>Sin pasos</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded ring-2 ring-primary ring-offset-1 ring-offset-background" />
-            <span>Hoy</span>
-          </div>
-        </div>
       </div>
     </div>
   );

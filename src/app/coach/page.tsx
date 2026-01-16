@@ -24,6 +24,7 @@ import {
   ListChecks,
   UtensilsCrossed,
   Target,
+  ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -286,6 +287,13 @@ export default function CoachDashboard() {
               >
                 <UtensilsCrossed className="w-5 h-5 text-orange-500" />
                 <span className="text-sm font-medium text-text">CATÁLOGO DE ALIMENTOS</span>
+              </div>
+              <div
+                className="p-4 flex items-center gap-3 cursor-pointer touch-feedback"
+                onClick={() => router.push("/coach/meal-plans")}
+              >
+                <ClipboardList className="w-5 h-5 text-amber-500" />
+                <span className="text-sm font-medium text-text">PLANES DE ALIMENTACIÓN</span>
               </div>
             </CardContent>
           </Card>

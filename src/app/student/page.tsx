@@ -17,6 +17,7 @@ import {
   Scale,
   Dumbbell,
   Utensils,
+  ClipboardList,
   TrendingUp,
   TrendingDown,
   ArrowRight,
@@ -445,6 +446,27 @@ export default function StudentDashboard() {
                   <div className="flex-1">
                     <h3 className="font-semibold text-text">Nutrición</h3>
                     <p className="text-sm text-text-muted">Registrar comidas</p>
+                  </div>
+                  <ArrowRight className="w-5 h-5 text-text-muted" />
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Meal Plan Card */}
+          <motion.div>
+            <Card
+              className="bg-surface/80 border-border cursor-pointer touch-feedback overflow-hidden"
+              onClick={() => router.push("/student/meal-plan")}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center shadow-lg">
+                    <ClipboardList className="w-6 h-6 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-text">Plan de Alimentación</h3>
+                    <p className="text-sm text-text-muted">Guía del coach</p>
                   </div>
                   <ArrowRight className="w-5 h-5 text-text-muted" />
                 </div>

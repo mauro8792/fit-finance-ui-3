@@ -90,7 +90,7 @@ export default function AssignMealPlanPage({
     (s) =>
       s.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.lastName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.email.toLowerCase().includes(searchQuery.toLowerCase())
+      s.email?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const toggleStudent = (studentId: number) => {

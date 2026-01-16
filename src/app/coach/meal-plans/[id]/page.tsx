@@ -42,7 +42,7 @@ import { getMealPlanTemplate, deleteMealPlanTemplate, duplicateMealPlanTemplate 
 
 // Types
 interface FoodItem {
-  id: number;
+  id?: number;
   name: string;
   quantity: number;
   unit: string;
@@ -53,14 +53,14 @@ interface FoodItem {
 }
 
 interface Meal {
-  id: number;
+  id?: number;
   name: string;
   icon: string;
   order: number;
-  totalCalories: number;
-  totalProtein: number;
-  totalCarbs: number;
-  totalFat: number;
+  totalCalories?: number;
+  totalProtein?: number;
+  totalCarbs?: number;
+  totalFat?: number;
   foods: FoodItem[];
 }
 
@@ -317,7 +317,7 @@ export default function MealPlanDetailPage({
                     "bg-surface/80 border-border overflow-hidden cursor-pointer transition-all",
                     isExpanded && "ring-1 ring-primary/50"
                   )}
-                  onClick={() => setExpandedMealId(isExpanded ? null : meal.id)}
+                  onClick={() => setExpandedMealId(isExpanded ? null : meal.id ?? null)}
                 >
                   <CardContent className="p-0">
                     {/* Meal Header */}

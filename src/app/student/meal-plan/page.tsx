@@ -111,7 +111,8 @@ export default function MealPlanPage() {
 
   const selectedPlan = mealPlans.find((p) => p.id === selectedPlanId);
 
-  const toggleMeal = (mealId: number) => {
+  const toggleMeal = (mealId: number | undefined) => {
+    if (mealId === undefined) return;
     setExpandedMealId(expandedMealId === mealId ? null : mealId);
   };
 

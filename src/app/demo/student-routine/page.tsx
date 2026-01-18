@@ -322,11 +322,6 @@ export default function DemoStudentRoutinePage() {
                             ) : (
                               <span className="text-sm text-white">{set.targetReps}</span>
                             )}
-                            {set.isDropSet && (
-                              <Badge className="bg-orange-600/80 text-white text-[8px] px-1 py-0.5">
-                                <ArrowDownToLine className="w-3 h-3" />
-                              </Badge>
-                            )}
                           </div>
 
                           {/* REAL - muestra valor o input según si está activo */}

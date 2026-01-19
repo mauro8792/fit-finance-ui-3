@@ -92,6 +92,8 @@ export interface StudentMesocycle {
   sourceTemplateId?: string;
   macrocycleId?: number;
   name: string;
+  description?: string;
+  objective?: string;
   status: StudentMesocycleStatus;
   startDate?: string;
   endDate?: string;
@@ -225,6 +227,7 @@ export interface AddSetDto {
   targetReps: string;
   targetLoad?: number;
   targetRir?: number | string;
+  targetRpe?: number;
   isWarmup?: boolean;
   isDropSet?: boolean;
   isAmrap?: boolean;
@@ -232,6 +235,7 @@ export interface AddSetDto {
   amrapInstruction?: string;
   restSeconds?: number;
   technique?: string;
+  dropSetCount?: number;
 }
 
 export interface AssignTemplateDto {

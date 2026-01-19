@@ -1,6 +1,6 @@
 // Service Worker for BraCamp PWA
 // Version will be injected during build
-const CACHE_VERSION = 'v2026.01.18.mkjqdcpl';
+const CACHE_VERSION = 'v2026.01.19.mklkm9md';
 const CACHE_NAME = `bracamp-${CACHE_VERSION}`;
 
 // Assets to cache on install

@@ -474,7 +474,7 @@ function SetRow({
           isPreview && "opacity-50"
         )}
         disabled={isPreview || set.isCompleted}
-        placeholder={set.targetRir || "-"}
+        placeholder={set.targetRir?.toString() || "-"}
       />
 
       {/* Action */}

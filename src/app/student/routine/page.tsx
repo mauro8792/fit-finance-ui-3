@@ -336,7 +336,7 @@ export default function RoutinePage() {
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div>
                   <p className="text-2xl font-bold text-primary">
-                    {currentMicro.days.filter((d) => !d.esDescanso && d.exercises?.length).length}
+                    {currentMicro.days.filter((d) => !(d as any).esDescanso && !(d as any).isRestDay && d.exercises?.length).length}
                   </p>
                   <p className="text-xs text-text-muted">Días</p>
                 </div>

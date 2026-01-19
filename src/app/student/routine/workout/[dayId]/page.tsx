@@ -513,12 +513,12 @@ export default function WorkoutPage() {
 
     try {
       const payload = {
-        actualReps: editingSetV2.actualReps || null,
-        actualLoad: editingSetV2.actualLoad ? parseFloat(editingSetV2.actualLoad) : null,
-        actualRir: editingSetV2.actualRir ? parseInt(editingSetV2.actualRir) : null,
-        actualRpe: editingSetV2.actualRpe ? parseInt(editingSetV2.actualRpe) : null,
-        notes: editingSetV2.notes || null,
-        completedAt: status === "completed" ? new Date().toISOString() : null,
+        actualReps: editingSetV2.actualReps || undefined,
+        actualLoad: editingSetV2.actualLoad ? parseFloat(editingSetV2.actualLoad) : undefined,
+        actualRir: editingSetV2.actualRir ? parseInt(editingSetV2.actualRir) : undefined,
+        actualRpe: editingSetV2.actualRpe ? parseInt(editingSetV2.actualRpe) : undefined,
+        notes: editingSetV2.notes || undefined,
+        completedAt: status === "completed" ? new Date().toISOString() : undefined,
       };
 
       // Usar endpoint de estudiante (/v2/my-routines)

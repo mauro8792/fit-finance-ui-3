@@ -1,3 +1,6 @@
+// Re-export routine v2 types
+export * from './routine-v2';
+
 // ========== AUTH ==========
 export interface User {
   id: number;

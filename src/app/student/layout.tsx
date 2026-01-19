@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/auth-store";
 import { BottomNav } from "@/components/navigation/BottomNav";
 import { Loader2 } from "lucide-react";
+import { useNotifications } from "@/hooks/useNotifications";
 
 export default function StudentLayout({
   children,
@@ -13,6 +14,9 @@ export default function StudentLayout({
 }) {
   const router = useRouter();
   const { status, userType, checkAuth } = useAuthStore();
+  
+  // Conectar WebSocket para recibir notificaciones en tiempo real
+  useNotifications();
 
   useEffect(() => {
     checkAuth();

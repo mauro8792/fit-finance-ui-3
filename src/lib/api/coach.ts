@@ -143,3 +143,34 @@ export const getStudentWeeklyNutrition = async (studentId: number) => {
   return data;
 };
 
+// ========== EXERCISE CATALOG ==========
+
+export interface CatalogExercise {
+  id: number;
+  name: string;
+  description?: string;
+  muscleGroup: string;
+  equipment?: string;
+  videoUrl?: string;
+  imageUrl?: string;
+}
+
+export const getExerciseCatalog = async (
+  muscleGroup?: string,
+  search?: string
+): Promise<CatalogExercise[]> => {
+  let url = "/exercise-catalog";
+  const params = new URLSearchParams();
+  if (muscleGroup) params.append("muscleGroup", muscleGroup);
+  if (search) params.append("search", search);
+  if (params.toString()) url += `?${params.toString()}`;
+  
+  const { data } = await api.get(url);
+  return data;
+};
+
+export const getMuscleGroups = async (): Promise<string[]> => {
+  const { data } = await api.get("/exercise-catalog/muscle-groups");
+  return data;
+};
+

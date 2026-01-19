@@ -262,14 +262,14 @@ export default function CoachDashboard() {
             <CardContent className="p-0 divide-y divide-border">
               <div
                 className="p-4 flex items-center gap-3 cursor-pointer touch-feedback"
-                onClick={() => router.push("/coach/routines/create")}
+                onClick={() => router.push("/coach/routines-v2/create")}
               >
                 <Plus className="w-5 h-5 text-primary" />
                 <span className="text-sm font-medium text-text">NUEVA PLANTILLA</span>
               </div>
               <div
                 className="p-4 flex items-center gap-3 cursor-pointer touch-feedback"
-                onClick={() => router.push("/coach/templates")}
+                onClick={() => router.push("/coach/routines-v2")}
               >
                 <Dumbbell className="w-5 h-5 text-success" />
                 <span className="text-sm font-medium text-text">MIS PLANTILLAS</span>

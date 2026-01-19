@@ -30,10 +30,13 @@ export default function RoutinePage() {
   const { 
     macrocycle, 
     activeMeso, 
+    routineV2,
+    isV2,
     selectedMicroIndex, 
     isLoading: loading,
     loadRoutine,
     setSelectedMicroIndex,
+    needsRefresh,
   } = useRoutineStore();
   
   // Read microcycle from URL
@@ -41,6 +44,14 @@ export default function RoutinePage() {
 
   // Get studentId from student profile or user
   const studentId = student?.id || (user as any)?.studentId;
+
+  // Microciclos (compatibles con V1 y V2)
+  const microcycles = isV2 
+    ? routineV2?.microcycles || []
+    : activeMeso?.microcycles || [];
+  
+  const currentMicro = microcycles[selectedMicroIndex];
+  const routineName = isV2 ? routineV2?.name : activeMeso?.name;
 
   // Update URL when microcycle changes (without causing reload)
   const updateMicroInUrl = (index: number) => {
@@ -53,7 +64,7 @@ export default function RoutinePage() {
   useEffect(() => {
     if (!studentId) return;
     
-    // Load routine (uses cache if valid)
+    // Load routine (uses cache if valid, or refreshes if needsRefresh is true)
     loadRoutine(studentId);
     
     // If URL has micro param, update selection
@@ -63,9 +74,7 @@ export default function RoutinePage() {
         setSelectedMicroIndex(urlIndex);
       }
     }
-  }, [studentId, microFromUrl, loadRoutine, setSelectedMicroIndex, selectedMicroIndex]);
-
-  const currentMicro = activeMeso?.microcycles?.[selectedMicroIndex];
+  }, [studentId, microFromUrl, loadRoutine, setSelectedMicroIndex, selectedMicroIndex, needsRefresh]);
 
   // Navigation handlers
   const goToPrevMicro = () => {
@@ -75,7 +84,7 @@ export default function RoutinePage() {
   };
 
   const goToNextMicro = () => {
-    if (activeMeso?.microcycles && selectedMicroIndex < activeMeso.microcycles.length - 1) {
+    if (microcycles && selectedMicroIndex < microcycles.length - 1) {
       updateMicroInUrl(selectedMicroIndex + 1);
     }
   };
@@ -89,7 +98,10 @@ export default function RoutinePage() {
     );
   }
 
-  if (!macrocycle || !activeMeso) {
+  // Check if there's any routine (V1 or V2)
+  const hasRoutine = isV2 ? !!routineV2 : (!!macrocycle && !!activeMeso);
+
+  if (!hasRoutine) {
     return (
       <div className="min-h-screen bg-background">
         <PageHeader title="Mi Rutina" backHref="/student" />
@@ -116,7 +128,7 @@ export default function RoutinePage() {
   return (
     <div className="min-h-screen bg-background pb-24">
       <PageHeader 
-        title={macrocycle.name} 
+        title={isV2 ? (routineV2?.name || "Mi Rutina") : (macrocycle?.name || "Mi Rutina")} 
         subtitle="Mi Rutina Actual"
         backHref="/student" 
       />
@@ -159,7 +171,7 @@ export default function RoutinePage() {
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <h2 className="font-bold text-text">{activeMeso.name}</h2>
+                  <h2 className="font-bold text-text">{isV2 ? routineV2?.name : activeMeso?.name}</h2>
                   <Badge className={cn(
                     "text-xs",
                     isPreview 
@@ -170,7 +182,7 @@ export default function RoutinePage() {
                   </Badge>
                 </div>
                 <p className="text-sm text-text-muted">
-                  {activeMeso.objetivo || "Mesociclo de entrenamiento"}
+                  {isV2 ? (routineV2?.objective || routineV2?.description || "Rutina de entrenamiento") : (activeMeso?.objetivo || "Mesociclo de entrenamiento")}
                 </p>
               </div>
             </div>
@@ -192,16 +204,16 @@ export default function RoutinePage() {
           {/* Current Microcycle Display */}
           <div className="flex-1 text-center">
             <p className="font-semibold text-text">
-              Microciclo {selectedMicroIndex + 1}
+              {isV2 ? `M${(currentMicro as any)?.order || selectedMicroIndex + 1}` : `Microciclo ${selectedMicroIndex + 1}`}
               <span className="text-text-muted font-normal ml-2">
-                de {activeMeso.microcycles?.length || 0}
+                de {microcycles?.length || 0}
               </span>
             </p>
             {currentMicro && (
               <p className="text-sm text-text-muted flex items-center justify-center gap-2">
                 {currentMicro.name}
                 {currentMicro.isDeload && (
-                  <Badge variant="outline" className="text-xs">
+                  <Badge variant="outline" className="text-xs bg-blue-500/20 text-blue-400">
                     Descarga
                   </Badge>
                 )}
@@ -214,7 +226,7 @@ export default function RoutinePage() {
             size="icon"
             className="h-10 w-10 shrink-0"
             onClick={goToNextMicro}
-            disabled={!activeMeso.microcycles || selectedMicroIndex >= activeMeso.microcycles.length - 1}
+            disabled={!microcycles || selectedMicroIndex >= microcycles.length - 1}
           >
             <ChevronRight className="w-5 h-5" />
           </Button>
@@ -229,14 +241,16 @@ export default function RoutinePage() {
           {currentMicro?.days && currentMicro.days.length > 0 ? (
             <div className="grid grid-cols-3 gap-2">
               {currentMicro.days
-                .filter((day) => !day.esDescanso && day.exercises && day.exercises.length > 0)
-                .sort((a, b) => a.dia - b.dia)
-                .map((day) => {
+                .filter((day: any) => !(isV2 ? day.isRestDay : day.esDescanso) && day.exercises && day.exercises.length > 0)
+                .sort((a: any, b: any) => (isV2 ? a.dayNumber : a.dia) - (isV2 ? b.dayNumber : b.dia))
+                .map((day: any) => {
                   const totalSets = day.exercises?.reduce(
-                    (acc, ex) => acc + (ex.sets?.length || 0), 0
+                    (acc: number, ex: any) => acc + (ex.sets?.length || 0), 0
                   ) || 0;
                   const completedSets = day.exercises?.reduce(
-                    (acc, ex) => acc + (ex.sets?.filter((s) => s.status === "completed").length || 0), 0
+                    (acc: number, ex: any) => acc + (ex.sets?.filter((s: any) => 
+                      isV2 ? (s.isCompleted || s.completedAt) : s.status === "completed"
+                    ).length || 0), 0
                   ) || 0;
                   const progress = totalSets > 0 ? (completedSets / totalSets) * 100 : 0;
                   const isComplete = progress === 100;
@@ -276,10 +290,10 @@ export default function RoutinePage() {
                             )}
                           </div>
                           <p className="font-bold text-text text-lg">
-                            DÍA {day.dia}
+                            DÍA {isV2 ? day.dayNumber : day.dia}
                           </p>
                           <p className="text-xs text-text-muted">
-                            {day.nombre || `${day.exercises?.length || 0} ejercicios`}
+                            {(isV2 ? day.name : day.nombre) || `${day.exercises?.length || 0} ejercicios`}
                           </p>
                           {totalSets > 0 && (
                             <div className="mt-2">

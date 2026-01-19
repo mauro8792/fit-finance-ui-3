@@ -635,7 +635,7 @@ export default function ProgressPage() {
                             barCategoryGap="20%"
                             style={{ outline: 'none' }}
                             onMouseMove={(state) => {
-                              if (state && state.activeTooltipIndex !== undefined) {
+                              if (state && typeof state.activeTooltipIndex === 'number') {
                                 setActiveBarIndex(state.activeTooltipIndex);
                               }
                             }}

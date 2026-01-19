@@ -18,10 +18,7 @@ import {
   Dumbbell,
   Calendar,
   Layers,
-  Save,
   Cloud,
-  CloudOff,
-  Check,
   Plus,
   Minus,
   FileText,
@@ -29,17 +26,18 @@ import {
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import * as routineV2Api from "@/lib/api/routine-v2";
 
 // ==================== TYPES ====================
 interface DraftData {
   step: number;
-  macrocycle: {
+  template: {
     name: string;
     description: string;
-    objetivo: string;
+    objective: string;
+    tags: string[];
   };
-  mesocycle: {
-    name: string;
+  structure: {
     microcyclesCount: number;
     daysPerMicrocycle: number;
     dayNames: string[];
@@ -47,7 +45,7 @@ interface DraftData {
   lastSaved: string;
 }
 
-const DRAFT_KEY = "routine_template_draft";
+const DRAFT_KEY = "routine_template_draft_v2";
 
 const defaultDayNames = [
   "Día 1",
@@ -78,13 +76,13 @@ export default function CreateRoutineV2Page() {
   const [showDraftDialog, setShowDraftDialog] = useState(false);
   const [pendingDraft, setPendingDraft] = useState<DraftData | null>(null);
 
-  // Step 1: Macrociclo
-  const [macroName, setMacroName] = useState("");
-  const [macroDescription, setMacroDescription] = useState("");
-  const [macroObjetivo, setMacroObjetivo] = useState("");
+  // Step 1: Info general
+  const [templateName, setTemplateName] = useState("");
+  const [templateDescription, setTemplateDescription] = useState("");
+  const [templateObjective, setTemplateObjective] = useState("");
+  const [templateTags, setTemplateTags] = useState<string[]>([]);
 
-  // Step 2: Mesociclo
-  const [mesoName, setMesoName] = useState("");
+  // Step 2: Estructura
   const [microcyclesCount, setMicrocyclesCount] = useState(4);
   const [daysPerMicrocycle, setDaysPerMicrocycle] = useState(4);
   const [dayNames, setDayNames] = useState<string[]>(defaultDayNames.slice(0, 4));
@@ -93,13 +91,13 @@ export default function CreateRoutineV2Page() {
   const saveDraft = useCallback(() => {
     const draft: DraftData = {
       step,
-      macrocycle: {
-        name: macroName,
-        description: macroDescription,
-        objetivo: macroObjetivo,
+      template: {
+        name: templateName,
+        description: templateDescription,
+        objective: templateObjective,
+        tags: templateTags,
       },
-      mesocycle: {
-        name: mesoName,
+      structure: {
         microcyclesCount,
         daysPerMicrocycle,
         dayNames,
@@ -108,7 +106,7 @@ export default function CreateRoutineV2Page() {
     };
     localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
     setAutoSaveStatus("saved");
-  }, [step, macroName, macroDescription, macroObjetivo, mesoName, microcyclesCount, daysPerMicrocycle, dayNames]);
+  }, [step, templateName, templateDescription, templateObjective, templateTags, microcyclesCount, daysPerMicrocycle, dayNames]);
 
   // Load draft on mount
   useEffect(() => {
@@ -126,7 +124,7 @@ export default function CreateRoutineV2Page() {
 
   // Auto-save on changes
   useEffect(() => {
-    const hasData = macroName || macroDescription || macroObjetivo || mesoName;
+    const hasData = templateName || templateDescription || templateObjective;
     if (!hasData) return;
 
     setAutoSaveStatus("saving");
@@ -135,18 +133,18 @@ export default function CreateRoutineV2Page() {
     }, 1500);
 
     return () => clearTimeout(timer);
-  }, [macroName, macroDescription, macroObjetivo, mesoName, microcyclesCount, daysPerMicrocycle, dayNames, saveDraft]);
+  }, [templateName, templateDescription, templateObjective, templateTags, microcyclesCount, daysPerMicrocycle, dayNames, saveDraft]);
 
   // Apply draft
   const applyDraft = (draft: DraftData) => {
     setStep(draft.step);
-    setMacroName(draft.macrocycle.name);
-    setMacroDescription(draft.macrocycle.description);
-    setMacroObjetivo(draft.macrocycle.objetivo);
-    setMesoName(draft.mesocycle.name);
-    setMicrocyclesCount(draft.mesocycle.microcyclesCount);
-    setDaysPerMicrocycle(draft.mesocycle.daysPerMicrocycle);
-    setDayNames(draft.mesocycle.dayNames);
+    setTemplateName(draft.template.name);
+    setTemplateDescription(draft.template.description);
+    setTemplateObjective(draft.template.objective);
+    setTemplateTags(draft.template.tags || []);
+    setMicrocyclesCount(draft.structure.microcyclesCount);
+    setDaysPerMicrocycle(draft.structure.daysPerMicrocycle);
+    setDayNames(draft.structure.dayNames);
     setShowDraftDialog(false);
     setAutoSaveStatus("saved");
   };
@@ -162,38 +160,77 @@ export default function CreateRoutineV2Page() {
   const handleDaysChange = (newCount: number) => {
     setDaysPerMicrocycle(newCount);
     if (newCount > dayNames.length) {
-      // Agregar días
       const newNames = [...dayNames];
       for (let i = dayNames.length; i < newCount; i++) {
         newNames.push(defaultDayNames[i] || `Día ${i + 1}`);
       }
       setDayNames(newNames);
     } else {
-      // Quitar días
       setDayNames(dayNames.slice(0, newCount));
     }
   };
 
+  // Toggle tag
+  const toggleTag = (tag: string) => {
+    if (templateTags.includes(tag)) {
+      setTemplateTags(templateTags.filter(t => t !== tag));
+    } else {
+      setTemplateTags([...templateTags, tag]);
+    }
+  };
+
   // Validation
-  const canGoToStep2 = macroName.trim().length > 0;
-  const canGoToStep3 = mesoName.trim().length > 0 && daysPerMicrocycle >= 1;
+  const canGoToStep2 = templateName.trim().length > 0;
+  const canCreate = daysPerMicrocycle >= 1;
 
   // Create template
   const handleCreate = async () => {
     setSaving(true);
     
-    // Simular creación
-    await new Promise((r) => setTimeout(r, 1500));
-    
-    // Limpiar draft
-    localStorage.removeItem(DRAFT_KEY);
-    
-    toast.success("¡Plantilla creada!", {
-      description: "Ahora podés agregar los ejercicios",
-    });
-    
-    // Ir al editor de microciclo
-    router.push("/coach/routines-v2/1/edit?micro=1");
+    try {
+      // 1. Crear la plantilla
+      const template = await routineV2Api.createTemplate({
+        name: templateName,
+        description: templateDescription || undefined,
+        objective: templateObjective || undefined,
+        estimatedWeeks: microcyclesCount,
+        targetDaysPerWeek: daysPerMicrocycle,
+        tags: templateTags.length > 0 ? templateTags : undefined,
+      });
+
+      // 2. Crear todos los microciclos con sus días
+      for (let weekNum = 1; weekNum <= microcyclesCount; weekNum++) {
+        const micro = await routineV2Api.addMicrocycle(template.id, {
+          name: `Semana ${weekNum}`,
+          weekNumber: weekNum,
+          isDeload: false,
+        });
+
+        // 3. Crear los días del microciclo
+        for (let i = 0; i < daysPerMicrocycle; i++) {
+          await routineV2Api.addDay(micro.id, {
+            name: dayNames[i] || `Día ${i + 1}`,
+            isRestDay: false,
+          });
+        }
+      }
+
+      // Limpiar draft
+      localStorage.removeItem(DRAFT_KEY);
+      
+      toast.success("¡Plantilla creada!", {
+        description: "Ahora podés agregar los ejercicios",
+      });
+      
+      // Ir al editor
+      router.push(`/coach/routines-v2/${template.id}/edit`);
+    } catch (error) {
+      console.error("Error creating template:", error);
+      toast.error("Error al crear la plantilla", {
+        description: "Intentá de nuevo",
+      });
+      setSaving(false);
+    }
   };
 
   const totalSteps = 2;
@@ -232,7 +269,7 @@ export default function CreateRoutineV2Page() {
 
       <div className="px-4 py-4 space-y-4">
         <AnimatePresence mode="wait">
-          {/* ==================== STEP 1: MACROCICLO ==================== */}
+          {/* ==================== STEP 1: INFO GENERAL ==================== */}
           {step === 1 && (
             <motion.div
               key="step1"
@@ -257,8 +294,8 @@ export default function CreateRoutineV2Page() {
                     <Label>Nombre de la plantilla *</Label>
                     <Input
                       placeholder="Ej: Hipertrofia Full Body"
-                      value={macroName}
-                      onChange={(e) => setMacroName(e.target.value)}
+                      value={templateName}
+                      onChange={(e) => setTemplateName(e.target.value)}
                       className="bg-background"
                     />
                   </div>
@@ -270,16 +307,38 @@ export default function CreateRoutineV2Page() {
                       {objetivos.map((obj) => (
                         <Badge
                           key={obj}
-                          variant={macroObjetivo === obj ? "default" : "outline"}
+                          variant={templateObjective === obj ? "default" : "outline"}
                           className={cn(
                             "cursor-pointer transition-colors",
-                            macroObjetivo === obj 
+                            templateObjective === obj 
                               ? "bg-primary text-black" 
                               : "hover:border-primary"
                           )}
-                          onClick={() => setMacroObjetivo(macroObjetivo === obj ? "" : obj)}
+                          onClick={() => setTemplateObjective(templateObjective === obj ? "" : obj)}
                         >
                           {obj}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Tags */}
+                  <div className="space-y-2">
+                    <Label>Etiquetas (para organizar)</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {["Principiante", "Intermedio", "Avanzado", "Full Body", "Upper/Lower", "PPL", "Drop Sets", "AMRAP"].map((tag) => (
+                        <Badge
+                          key={tag}
+                          variant={templateTags.includes(tag) ? "default" : "outline"}
+                          className={cn(
+                            "cursor-pointer transition-colors text-xs",
+                            templateTags.includes(tag) 
+                              ? "bg-accent text-black" 
+                              : "hover:border-accent"
+                          )}
+                          onClick={() => toggleTag(tag)}
+                        >
+                          {tag}
                         </Badge>
                       ))}
                     </div>
@@ -290,8 +349,8 @@ export default function CreateRoutineV2Page() {
                     <Label>Descripción (opcional)</Label>
                     <Textarea
                       placeholder="Describe brevemente esta rutina..."
-                      value={macroDescription}
-                      onChange={(e) => setMacroDescription(e.target.value)}
+                      value={templateDescription}
+                      onChange={(e) => setTemplateDescription(e.target.value)}
                       className="bg-background resize-none"
                       rows={3}
                     />
@@ -311,7 +370,7 @@ export default function CreateRoutineV2Page() {
             </motion.div>
           )}
 
-          {/* ==================== STEP 2: MESOCICLO Y MICROCICLOS ==================== */}
+          {/* ==================== STEP 2: ESTRUCTURA ==================== */}
           {step === 2 && (
             <motion.div
               key="step2"
@@ -331,17 +390,6 @@ export default function CreateRoutineV2Page() {
                   </p>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {/* Nombre del mesociclo */}
-                  <div className="space-y-2">
-                    <Label>Nombre del mesociclo *</Label>
-                    <Input
-                      placeholder="Ej: Fase de Acumulación"
-                      value={mesoName}
-                      onChange={(e) => setMesoName(e.target.value)}
-                      className="bg-background"
-                    />
-                  </div>
-
                   {/* Microciclos */}
                   <div className="space-y-2">
                     <Label>Cantidad de semanas (microciclos)</Label>
@@ -428,6 +476,26 @@ export default function CreateRoutineV2Page() {
                     </div>
                   </div>
 
+                  {/* Nombres de días */}
+                  <div className="space-y-2">
+                    <Label>Nombres de los días</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {dayNames.map((name, idx) => (
+                        <Input
+                          key={idx}
+                          value={name}
+                          onChange={(e) => {
+                            const newNames = [...dayNames];
+                            newNames[idx] = e.target.value;
+                            setDayNames(newNames);
+                          }}
+                          placeholder={`Día ${idx + 1}`}
+                          className="bg-background text-sm"
+                        />
+                      ))}
+                    </div>
+                  </div>
+
                 </CardContent>
               </Card>
 
@@ -439,8 +507,9 @@ export default function CreateRoutineV2Page() {
                     Resumen
                   </h4>
                   <div className="space-y-1 text-sm text-text-muted">
-                    <p>📋 <strong className="text-text">{macroName || "Sin nombre"}</strong></p>
-                    {macroObjetivo && <p>🎯 Objetivo: {macroObjetivo}</p>}
+                    <p>📋 <strong className="text-text">{templateName || "Sin nombre"}</strong></p>
+                    {templateObjective && <p>🎯 Objetivo: {templateObjective}</p>}
+                    {templateTags.length > 0 && <p>🏷️ Tags: {templateTags.join(", ")}</p>}
                     <p>📅 {microcyclesCount} semanas × {daysPerMicrocycle} días = <strong className="text-text">{microcyclesCount * daysPerMicrocycle} entrenamientos</strong></p>
                   </div>
                 </CardContent>
@@ -458,7 +527,7 @@ export default function CreateRoutineV2Page() {
                 </Button>
                 <Button
                   className="flex-1 h-14 bg-primary text-black font-semibold"
-                  disabled={!canGoToStep3 || saving}
+                  disabled={!canCreate || saving}
                   onClick={handleCreate}
                 >
                   {saving ? (
@@ -486,13 +555,13 @@ export default function CreateRoutineV2Page() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/80 flex items-end justify-center p-4"
+            className="fixed inset-0 z-50 bg-black/80 flex items-end justify-center p-4 pb-24"
           >
             <motion.div
               initial={{ y: 100 }}
               animate={{ y: 0 }}
               exit={{ y: 100 }}
-              className="w-full max-w-md bg-surface rounded-2xl p-6 space-y-4"
+              className="w-full max-w-md bg-surface rounded-2xl p-6 space-y-4 mb-safe"
             >
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
@@ -507,7 +576,7 @@ export default function CreateRoutineV2Page() {
               </div>
               
               <p className="text-sm text-text-muted">
-                Tenés un borrador de "{pendingDraft.macrocycle.name || "plantilla sin nombre"}". 
+                Tenés un borrador de &quot;{pendingDraft.template.name || "plantilla sin nombre"}&quot;. 
                 ¿Querés continuar donde lo dejaste?
               </p>
 
@@ -533,4 +602,3 @@ export default function CreateRoutineV2Page() {
     </div>
   );
 }
-

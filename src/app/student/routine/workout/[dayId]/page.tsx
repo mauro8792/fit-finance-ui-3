@@ -7,6 +7,8 @@ import { getDayById, updateSet } from "@/lib/api/routine";
 import { useAuthStore } from "@/stores/auth-store";
 import { useRoutineStore } from "@/stores/routine-store";
 import api from "@/lib/api";
+import type { StudentDay, StudentExercise, StudentSet } from "@/types/routine-v2";
+import * as routineV2Api from "@/lib/api/routine-v2";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -90,21 +92,34 @@ export default function WorkoutPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { student } = useAuthStore();
-  const { activeMeso } = useRoutineStore();
-  const dayId = Number(params.dayId);
+  const { activeMeso, routineV2, isV2, invalidateCache } = useRoutineStore();
+  const dayIdParam = params.dayId as string;
+  
+  // Detectar si es UUID (V2) o número (V1)
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(dayIdParam);
+  const dayId = isUUID ? dayIdParam : Number(dayIdParam);
+  
   const microIndex = searchParams.get("micro") || "0";
   const backHref = `/student/routine?micro=${microIndex}`;
   const studentId = student?.id;
 
   // Solo puede editar si el mesociclo está activo
-  const isReadOnly = activeMeso?.status !== "active";
-  const readOnlyMessage = activeMeso?.status === "published" 
-    ? "Esta rutina está en modo preview. Tu coach debe activarla para que puedas completar las series."
-    : "Esta rutina no está activa.";
+  const isReadOnly = isV2 
+    ? routineV2?.status !== "active"
+    : activeMeso?.status !== "active";
+  const readOnlyMessage = isV2
+    ? (routineV2?.status === "scheduled" 
+        ? "Esta rutina está programada. Tu coach debe activarla para que puedas completar las series."
+        : "Esta rutina no está activa.")
+    : (activeMeso?.status === "published" 
+        ? "Esta rutina está en modo preview. Tu coach debe activarla para que puedas completar las series."
+        : "Esta rutina no está activa.");
 
   const [loading, setLoading] = useState(true);
   const [day, setDay] = useState<Day | null>(null);
+  const [dayV2, setDayV2] = useState<StudentDay | null>(null);
   const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [exercisesV2, setExercisesV2] = useState<StudentExercise[]>([]);
   
   // Edit modal state
   const [editingSet, setEditingSet] = useState<{
@@ -117,22 +132,49 @@ export default function WorkoutPage() {
     notes: string;
   } | null>(null);
 
-  // Timer state
+  // Timer state - usando timestamp para que funcione en background
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [timerRunning, setTimerRunning] = useState(false);
   const [showTimer, setShowTimer] = useState(false);
+  const [timerEndTime, setTimerEndTime] = useState<number | null>(null); // timestamp de cuando termina
 
   // Video state
   const [showVideo, setShowVideo] = useState<string | null>(null);
 
   // Context menu state
   const [menuOpen, setMenuOpen] = useState<number | null>(null);
+  const [menuOpenV2, setMenuOpenV2] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const menuRefV2 = useRef<HTMLDivElement>(null);
 
   // History modal state
   const [historyExercise, setHistoryExercise] = useState<Exercise | null>(null);
+  const [historyExerciseV2, setHistoryExerciseV2] = useState<StudentExercise | null>(null);
   const [historyData, setHistoryData] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+
+  // Edit set V2 modal state
+  const [editingSetV2, setEditingSetV2] = useState<{
+    set: StudentSet;
+    exercise: StudentExercise;
+    actualReps: string;
+    actualLoad: string;
+    actualRir: string;
+    actualRpe: string;
+    notes: string;
+  } | null>(null);
+
+  // Video V2 state
+  const [showVideoV2, setShowVideoV2] = useState<string | null>(null);
+
+  // Edit drop set state
+  const [editingDrop, setEditingDrop] = useState<{
+    set: StudentSet;
+    exercise: StudentExercise;
+    dropIndex: number;
+    reps: string;
+    load: string;
+  } | null>(null);
 
   // DnD sensors
   const sensors = useSensors(
@@ -150,9 +192,20 @@ export default function WorkoutPage() {
     const loadDay = async () => {
       try {
         setLoading(true);
-        const data = await getDayById(dayId);
-        setDay(data);
-        setExercises(data.exercises?.sort((a: Exercise, b: Exercise) => a.orden - b.orden) || []);
+        
+        if (isUUID) {
+          // V2: Cargar siempre desde la API para tener datos frescos
+          // Usar endpoint de estudiante (/v2/my-routines)
+          const freshDay = await routineV2Api.getMyDay(dayIdParam);
+          setDayV2(freshDay);
+          const sortedExercises = freshDay.exercises?.slice().sort((a, b) => a.order - b.order) || [];
+          setExercisesV2(sortedExercises);
+        } else {
+          // V1: Cargar desde API antigua
+          const data = await getDayById(dayId as number);
+          setDay(data);
+          setExercises(data.exercises?.sort((a: Exercise, b: Exercise) => a.orden - b.orden) || []);
+        }
       } catch (error) {
         console.error("Error loading day:", error);
         toast.error("Error al cargar el entrenamiento");
@@ -162,7 +215,7 @@ export default function WorkoutPage() {
     };
 
     if (dayId) loadDay();
-  }, [dayId]);
+  }, [dayId, dayIdParam, isUUID]);
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -170,28 +223,77 @@ export default function WorkoutPage() {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setMenuOpen(null);
       }
+      if (menuRefV2.current && !menuRefV2.current.contains(e.target as Node)) {
+        setMenuOpenV2(null);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Timer countdown
+  // Timer countdown - usa timestamps para funcionar correctamente en background
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    if (timerRunning && timerSeconds > 0) {
-      interval = setInterval(() => {
-        setTimerSeconds((prev) => {
-          if (prev <= 1) {
-            setTimerRunning(false);
-            toast.success("¡Descanso terminado! 💪");
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+    
+    if (timerRunning && timerEndTime) {
+      // Calcular tiempo restante basado en timestamp real
+      const updateTimer = () => {
+        const remaining = Math.max(0, Math.ceil((timerEndTime - Date.now()) / 1000));
+        setTimerSeconds(remaining);
+        
+        if (remaining <= 0) {
+          setTimerRunning(false);
+          setTimerEndTime(null);
+          localStorage.removeItem('restTimerEndTime');
+          toast.success("¡Descanso terminado! 💪");
+        }
+      };
+      
+      // Actualizar inmediatamente y luego cada segundo
+      updateTimer();
+      interval = setInterval(updateTimer, 1000);
     }
+    
     return () => clearInterval(interval);
-  }, [timerRunning, timerSeconds]);
+  }, [timerRunning, timerEndTime]);
+
+  // Recuperar timer cuando el usuario vuelve de otra app
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && timerEndTime) {
+        const remaining = Math.max(0, Math.ceil((timerEndTime - Date.now()) / 1000));
+        setTimerSeconds(remaining);
+        
+        if (remaining <= 0) {
+          setTimerRunning(false);
+          setTimerEndTime(null);
+          localStorage.removeItem('restTimerEndTime');
+          toast.success("¡Descanso terminado! 💪");
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [timerEndTime]);
+
+  // Restaurar timer desde localStorage al cargar la página
+  useEffect(() => {
+    const savedEndTime = localStorage.getItem('restTimerEndTime');
+    if (savedEndTime) {
+      const endTime = parseInt(savedEndTime, 10);
+      const remaining = Math.max(0, Math.ceil((endTime - Date.now()) / 1000));
+      
+      if (remaining > 0) {
+        setTimerEndTime(endTime);
+        setTimerSeconds(remaining);
+        setShowTimer(true);
+        setTimerRunning(true);
+      } else {
+        localStorage.removeItem('restTimerEndTime');
+      }
+    }
+  }, []);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -200,9 +302,27 @@ export default function WorkoutPage() {
   };
 
   const startRestTimer = (restSeconds = 120) => {
+    const endTime = Date.now() + (restSeconds * 1000);
+    setTimerEndTime(endTime);
     setTimerSeconds(restSeconds);
     setShowTimer(true);
     setTimerRunning(true);
+    // Guardar en localStorage para que sobreviva a recargas
+    localStorage.setItem('restTimerEndTime', endTime.toString());
+  };
+
+  const stopTimer = () => {
+    setShowTimer(false);
+    setTimerRunning(false);
+    setTimerEndTime(null);
+    localStorage.removeItem('restTimerEndTime');
+  };
+
+  const resetTimer = (seconds = 120) => {
+    const endTime = Date.now() + (seconds * 1000);
+    setTimerEndTime(endTime);
+    setTimerSeconds(seconds);
+    localStorage.setItem('restTimerEndTime', endTime.toString());
   };
 
   // Handle drag end
@@ -367,6 +487,210 @@ export default function WorkoutPage() {
     }
   };
 
+  // ==================== V2 HANDLERS ====================
+
+  // Open edit modal V2
+  const handleCellClickV2 = (set: StudentSet, exercise: StudentExercise) => {
+    if (isReadOnly) {
+      toast.info(readOnlyMessage);
+      return;
+    }
+    
+    setEditingSetV2({
+      set,
+      exercise,
+      actualReps: set.actualReps || "",
+      actualLoad: set.actualLoad?.toString() || "",
+      actualRir: set.actualRir?.toString() || "",
+      actualRpe: set.actualRpe?.toString() || "",
+      notes: set.notes || "",
+    });
+  };
+
+  // Save set V2
+  const handleSaveSetV2 = async (status: "completed" | "failed" | "skipped" = "completed") => {
+    if (!editingSetV2) return;
+
+    try {
+      const payload = {
+        actualReps: editingSetV2.actualReps || null,
+        actualLoad: editingSetV2.actualLoad ? parseFloat(editingSetV2.actualLoad) : null,
+        actualRir: editingSetV2.actualRir ? parseInt(editingSetV2.actualRir) : null,
+        actualRpe: editingSetV2.actualRpe ? parseInt(editingSetV2.actualRpe) : null,
+        notes: editingSetV2.notes || null,
+        completedAt: status === "completed" ? new Date().toISOString() : null,
+      };
+
+      // Usar endpoint de estudiante (/v2/my-routines)
+      await routineV2Api.logMySet(editingSetV2.set.id, payload);
+
+      // Update local state
+      setExercisesV2((prev) =>
+        prev.map((ex) => {
+          if (ex.id !== editingSetV2.exercise.id) return ex;
+          return {
+            ...ex,
+            sets: ex.sets?.map((s) =>
+              s.id === editingSetV2.set.id ? { ...s, ...payload } : s
+            ),
+          };
+        })
+      );
+
+      setEditingSetV2(null);
+      
+      // Si es el primer set completado del día, actualizar startedAt
+      if (!dayV2?.startedAt && status === "completed") {
+        setDayV2((prev) => prev ? { ...prev, startedAt: new Date().toISOString() } : prev);
+      }
+      
+      // Invalidar caché para que la página de rutina muestre el progreso actualizado
+      invalidateCache();
+
+      if (status === "completed") {
+        toast.success("¡Serie guardada! 🎉");
+        const restSeconds = editingSetV2.exercise.restSeconds || 120;
+        startRestTimer(restSeconds);
+      }
+    } catch (error) {
+      console.error("Error saving set:", error);
+      toast.error("Error al guardar");
+    }
+  };
+
+  // View history V2
+  const handleViewHistoryV2 = async (exercise: StudentExercise) => {
+    setMenuOpenV2(null);
+    setHistoryExerciseV2(exercise);
+    setLoadingHistory(true);
+    
+    try {
+      if (!studentId || !exercise.exerciseCatalogId) {
+        setHistoryData([]);
+        return;
+      }
+      const { data } = await api.get(`/macrocycle/exercise-history/${studentId}/${exercise.exerciseCatalogId}`);
+      setHistoryData(data?.value || data || []);
+    } catch (error) {
+      console.error("Error loading history:", error);
+      setHistoryData([]);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  // View technique V2
+  const handleViewTechniqueV2 = (exercise: StudentExercise) => {
+    setMenuOpenV2(null);
+    const videoUrl = exercise.exerciseCatalog?.videoUrl;
+    if (videoUrl) {
+      setShowVideoV2(videoUrl);
+    } else {
+      toast.info("No hay video disponible para este ejercicio");
+    }
+  };
+
+  // Handle drop set click V2
+  const handleDropClickV2 = (set: StudentSet, exercise: StudentExercise, dropIndex: number) => {
+    if (isReadOnly) {
+      toast.info(readOnlyMessage);
+      return;
+    }
+    
+    const existingData = set.dropSetData?.[dropIndex];
+    setEditingDrop({
+      set,
+      exercise,
+      dropIndex,
+      reps: existingData?.reps || "",
+      load: existingData?.load?.toString() || "",
+    });
+  };
+
+  // Save drop set V2
+  const handleSaveDropV2 = async () => {
+    if (!editingDrop) return;
+
+    try {
+      // Crear o actualizar el array de dropSetData
+      const currentDropData = editingDrop.set.dropSetData || 
+        Array(editingDrop.set.dropSetCount).fill({ reps: undefined, load: undefined });
+      
+      const newDropData = [...currentDropData];
+      newDropData[editingDrop.dropIndex] = {
+        reps: editingDrop.reps || undefined,
+        load: editingDrop.load ? parseFloat(editingDrop.load) : undefined,
+      };
+
+      // Usar endpoint de estudiante (/v2/my-routines)
+      await routineV2Api.logMySet(editingDrop.set.id, {
+        dropSetData: newDropData,
+      } as any);
+
+      // Update local state
+      setExercisesV2((prev) =>
+        prev.map((ex) => {
+          if (ex.id !== editingDrop.exercise.id) return ex;
+          return {
+            ...ex,
+            sets: ex.sets?.map((s) =>
+              s.id === editingDrop.set.id ? { ...s, dropSetData: newDropData } : s
+            ),
+          };
+        })
+      );
+
+      setEditingDrop(null);
+      
+      // Invalidar caché para que la página de rutina muestre el progreso actualizado
+      invalidateCache();
+      
+      toast.success("Drop set guardado 💪");
+    } catch (error) {
+      console.error("Error saving drop set:", error);
+      toast.error("Error al guardar");
+    }
+  };
+
+  // Add extra set V2
+  const handleAddExtraSetV2 = async (exercise: StudentExercise) => {
+    setMenuOpenV2(null);
+    
+    try {
+      const existingSets = exercise.sets || [];
+      
+      if (existingSets.length >= 10) {
+        toast.error("Máximo 10 sets por ejercicio");
+        return;
+      }
+
+      // Usar endpoint de estudiante (/v2/my-routines)
+      const newSet = await routineV2Api.addMyExtraSet(exercise.id, {
+        order: existingSets.length + 1,
+        targetReps: exercise.targetReps || "10-12",
+        targetRir: exercise.sets?.[0]?.targetRir,
+        isExtra: true,
+      });
+
+      // Update local state
+      setExercisesV2((prev) =>
+        prev.map((ex) => {
+          if (ex.id !== exercise.id) return ex;
+          return {
+            ...ex,
+            sets: [...(ex.sets || []), newSet],
+          };
+        })
+      );
+
+      toast.success("Set agregado");
+      handleCellClickV2(newSet, { ...exercise, sets: [...(exercise.sets || []), newSet] });
+    } catch (error) {
+      console.error("Error adding extra set:", error);
+      toast.error("Error al agregar set");
+    }
+  };
+
   // Stats
   const totalSets = exercises.reduce((acc, ex) => acc + (ex.sets?.length || 0), 0);
   const completedSets = exercises.reduce(
@@ -386,6 +710,619 @@ export default function WorkoutPage() {
     );
   }
 
+  // ==================== RENDER V2 ====================
+  if (isUUID && dayV2) {
+    const totalSetsV2 = exercisesV2.reduce((acc, e) => acc + (e.sets?.length || 0), 0);
+    const completedSetsV2 = exercisesV2.reduce(
+      (acc, e) => acc + (e.sets?.filter((s) => s.completedAt).length || 0),
+      0
+    );
+
+    return (
+      <div className="min-h-screen bg-[#0a0a0f] pb-24">
+        {/* Header */}
+        <div className="bg-[#13131a] border-b border-[#1e1e2a] sticky top-0 z-40">
+          <div className="flex items-center justify-between px-4 py-3">
+            <button onClick={() => router.back()} className="text-gray-400 hover:text-white">
+              <X className="w-5 h-5" />
+            </button>
+            <div className="text-center">
+              <h1 className="text-white font-semibold">{dayV2.name || `Día ${dayV2.dayNumber}`}</h1>
+              <p className="text-xs text-gray-500">{completedSetsV2}/{totalSetsV2} series completadas</p>
+            </div>
+            <div className="w-5" />
+          </div>
+        </div>
+
+        {/* Fecha del entrenamiento V2 */}
+        {dayV2.startedAt && (
+          <div className="px-4 py-2 text-center bg-[#13131a]">
+            <span className="text-sm text-amber-400 flex items-center justify-center gap-2">
+              <span>📅</span>
+              {formatDateWithWeekday(dayV2.startedAt)}
+            </span>
+          </div>
+        )}
+
+        <div className="px-4 py-4 space-y-4">
+          {/* Read-only banner */}
+          {isReadOnly && (
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <span className="text-xl">🔒</span>
+                <div>
+                  <p className="text-sm text-amber-200">{readOnlyMessage}</p>
+                  <button className="text-sm text-amber-400 mt-2 flex items-center gap-1 hover:underline">
+                    <Play className="w-4 h-4" />
+                    Simular activación
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Exercises V2 */}
+          {exercisesV2.map((exercise) => {
+            const isExComplete = exercise.sets?.every((s) => s.completedAt);
+            const exerciseName = exercise.exerciseCatalog?.name || `Ejercicio ${exercise.order}`;
+            const muscleGroup = exercise.exerciseCatalog?.muscleGroup || "";
+            
+            return (
+              <Card key={exercise.id} className="bg-[#13131a] border-[#1e1e2a] overflow-hidden">
+                {/* Exercise Header */}
+                <div className="p-4 border-b border-[#1e1e2a]">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-3">
+                      <div className="mt-1">
+                        <GripVertical className="w-5 h-5 text-gray-600" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-white font-semibold">{exerciseName}</h3>
+                          {isExComplete && <CheckCircle2 className="w-4 h-4 text-green-500" />}
+                        </div>
+                        <p className="text-xs text-gray-500">
+                          {muscleGroup} · {exercise.sets?.length || 0} series · 
+                          Reps: {exercise.targetReps || "10-12"} · 
+                          Descanso: {Math.floor((exercise.restSeconds || 120) / 60)}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {/* Menu Button V2 */}
+                    <div className="relative" ref={menuOpenV2 === exercise.id ? menuRefV2 : null}>
+                      <button 
+                        onClick={() => setMenuOpenV2(menuOpenV2 === exercise.id ? null : exercise.id)}
+                        className="text-gray-500 hover:text-white p-1"
+                      >
+                        <MoreVertical className="w-5 h-5" />
+                      </button>
+                      
+                      {/* Dropdown Menu V2 */}
+                      <AnimatePresence>
+                        {menuOpenV2 === exercise.id && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                            className="absolute right-0 top-full mt-1 z-50 bg-[#1a1a24] border border-[#2a2a35] rounded-lg shadow-xl overflow-hidden min-w-[180px]"
+                          >
+                            <button
+                              className="w-full px-4 py-3 flex items-center gap-3 hover:bg-[#252530] transition-colors text-left"
+                              onClick={() => handleViewHistoryV2(exercise)}
+                            >
+                              <History className="w-4 h-4 text-blue-400" />
+                              <span className="text-sm text-white">Ver Historial</span>
+                            </button>
+                            <button
+                              className="w-full px-4 py-3 flex items-center gap-3 hover:bg-[#252530] transition-colors text-left border-t border-[#2a2a35]"
+                              onClick={() => handleViewTechniqueV2(exercise)}
+                            >
+                              <Video className="w-4 h-4 text-red-400" />
+                              <span className="text-sm text-white">Ver Técnica</span>
+                            </button>
+                            <button
+                              className="w-full px-4 py-3 flex items-center gap-3 hover:bg-[#252530] transition-colors text-left border-t border-[#2a2a35]"
+                              onClick={() => handleAddExtraSetV2(exercise)}
+                            >
+                              <Plus className="w-4 h-4 text-green-400" />
+                              <span className="text-sm text-white">Agregar Set</span>
+                            </button>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </div>
+                  
+                  {/* Notes */}
+                  {exercise.coachNotes && (
+                    <div className="mt-3 bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                      <p className="text-xs text-blue-300 flex items-start gap-2">
+                        <span className="shrink-0">ℹ️</span>
+                        {exercise.coachNotes}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Sets Table */}
+                <div className="divide-y divide-[#1e1e2a]">
+                  {/* Header */}
+                  <div className="grid grid-cols-6 px-4 py-2 text-xs text-amber-500 font-medium bg-amber-500/10">
+                    <span className="text-center">REPS</span>
+                    <span className="text-center">REAL</span>
+                    <span className="text-center">CARGA</span>
+                    <span className="text-center">RIR-E</span>
+                    <span className="text-center">RIR-R</span>
+                    <span className="text-center">RPE</span>
+                  </div>
+
+                  {/* Set Rows */}
+                  {exercise.sets?.slice().sort((a, b) => a.order - b.order).map((set) => (
+                    <div key={set.id}>
+                      <div 
+                        onClick={() => handleCellClickV2(set, exercise)}
+                        className={cn(
+                          "grid grid-cols-6 px-4 py-3 items-center transition-colors",
+                          set.completedAt ? "bg-green-500/5" : "hover:bg-[#1a1a24]",
+                          !isReadOnly && "cursor-pointer active:bg-amber-500/10"
+                        )}
+                      >
+                        {/* Target Reps */}
+                        <span className="text-center text-white text-sm">
+                          {set.isAmrap ? (
+                            <Badge className="bg-purple-600/80 text-white text-[10px] px-1.5">MAX</Badge>
+                          ) : (
+                            set.targetReps
+                          )}
+                        </span>
+                        {/* Actual Reps */}
+                        <span className={cn(
+                          "text-center text-sm",
+                          set.actualReps ? "text-amber-400 font-semibold" : "text-gray-600"
+                        )}>
+                          {set.actualReps || "—"}
+                        </span>
+                        {/* Load */}
+                        <span className={cn(
+                          "text-center text-sm",
+                          set.actualLoad ? "text-white font-semibold" : "text-gray-600"
+                        )}>
+                          {set.actualLoad || set.targetLoad || "—"}
+                        </span>
+                        {/* Target RIR */}
+                        <span className="text-center text-gray-600 text-sm">
+                          {set.targetRir ?? "—"}
+                        </span>
+                        {/* Actual RIR */}
+                        <span className={cn(
+                          "text-center text-sm",
+                          set.actualRir ? "text-amber-400" : "text-gray-600"
+                        )}>
+                          {set.actualRir ?? "—"}
+                        </span>
+                        {/* RPE */}
+                        <span className={cn(
+                          "text-center text-sm",
+                          set.actualRpe ? "text-amber-400" : "text-gray-600"
+                        )}>
+                          {set.actualRpe || set.targetRpe || "—"}
+                        </span>
+                      </div>
+
+                      {/* Drop Sets */}
+                      {set.isDropSet && set.dropSetCount && (
+                        <>
+                          {Array.from({ length: set.dropSetCount }, (_, i) => {
+                            const dropData = set.dropSetData?.[i];
+                            const hasData = dropData?.reps || dropData?.load;
+                            
+                            return (
+                              <div
+                                key={`drop-${i}`}
+                                onClick={() => handleDropClickV2(set, exercise, i)}
+                                className={cn(
+                                  "grid grid-cols-6 px-4 py-2 items-center bg-orange-950/10 border-l-2 border-l-orange-500/50 transition-colors",
+                                  !isReadOnly && "cursor-pointer hover:bg-orange-950/20 active:bg-orange-500/20"
+                                )}
+                              >
+                                <span className="text-center text-xs text-orange-400">↳</span>
+                                <span className={cn(
+                                  "text-center text-xs",
+                                  dropData?.reps ? "text-amber-400 font-semibold" : "text-orange-400"
+                                )}>
+                                  {dropData?.reps || `Drop ${i + 1}`}
+                                </span>
+                                <span className={cn(
+                                  "text-center text-sm",
+                                  dropData?.load ? "text-white font-semibold" : "text-gray-600"
+                                )}>
+                                  {dropData?.load || "—"}
+                                </span>
+                                <span className="text-center text-sm text-gray-600">—</span>
+                                <span className="text-center text-sm text-gray-600">—</span>
+                                <span className="text-center text-sm text-gray-600">—</span>
+                              </div>
+                            );
+                          })}
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            );
+          })}
+
+          {/* Empty state */}
+          {exercisesV2.length === 0 && (
+            <div className="text-center py-12">
+              <p className="text-gray-500">No hay ejercicios en este día</p>
+            </div>
+          )}
+
+          {/* Instruction */}
+          {!isReadOnly && exercisesV2.length > 0 && (
+            <div className="text-center py-2">
+              <p className="text-xs text-gray-500">
+                💡 Tocá en cada fila para cargar tu peso, RIR y RPE
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Rest Timer Widget V2 */}
+        <AnimatePresence>
+          {showTimer && (
+            <motion.div
+              initial={{ opacity: 0, y: 100 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 100 }}
+              className="fixed bottom-20 left-4 right-4 bg-[#1a1a24] border border-amber-500/50 rounded-2xl p-4 shadow-xl z-40"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center">
+                    <Timer className="w-6 h-6 text-amber-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-400">Descanso</p>
+                    <p className="text-3xl font-bold text-amber-400 font-mono">{formatTime(timerSeconds)}</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="icon" className="border-gray-700" onClick={() => setTimerRunning(!timerRunning)}>
+                    {timerRunning ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                  </Button>
+                <Button variant="outline" size="icon" className="border-gray-700" onClick={() => resetTimer(120)}>
+                  <RotateCcw className="w-4 h-4" />
+                </Button>
+                <Button variant="ghost" size="icon" onClick={stopTimer}>
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Edit Set V2 Bottom Sheet */}
+        <AnimatePresence>
+          {editingSetV2 && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 z-50 flex items-end"
+              onClick={() => setEditingSetV2(null)}
+            >
+              <motion.div
+                initial={{ y: "100%" }}
+                animate={{ y: 0 }}
+                exit={{ y: "100%" }}
+                transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                className="w-full bg-[#13131a] rounded-t-3xl p-6 pb-8 border-t border-[#2a2a35]"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="w-12 h-1 bg-gray-700 rounded-full mx-auto mb-4" />
+                <div className="mb-4">
+                  <h3 className="text-lg font-bold text-white">
+                    {editingSetV2.exercise.exerciseCatalog?.name || "Ejercicio"}
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    Serie {(editingSetV2.exercise.sets?.findIndex((s) => s.id === editingSetV2.set.id) || 0) + 1} · 
+                    Reps objetivo: {editingSetV2.set.targetReps} · 
+                    RIR esperado: {editingSetV2.set.targetRir ?? "—"}
+                  </p>
+                </div>
+                
+                {/* Primera fila: REPS y CARGA */}
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block text-center">REPS REALES</label>
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      min="0"
+                      max="100"
+                      value={editingSetV2.actualReps}
+                      onChange={(e) => setEditingSetV2({ ...editingSetV2, actualReps: e.target.value })}
+                      className="text-center text-xl font-bold h-14 bg-amber-500/10 border-amber-500/30 text-amber-400"
+                      placeholder={editingSetV2.set.targetReps || "0"}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block text-center">CARGA (kg)</label>
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      step="0.5"
+                      value={editingSetV2.actualLoad}
+                      onChange={(e) => setEditingSetV2({ ...editingSetV2, actualLoad: e.target.value })}
+                      className="text-center text-xl font-bold h-14 bg-white/5 border-gray-700 text-white"
+                      placeholder={editingSetV2.set.targetLoad?.toString() || "0"}
+                    />
+                  </div>
+                </div>
+                
+                {/* Segunda fila: RIR y RPE */}
+                <div className="grid grid-cols-2 gap-3 mb-6">
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block text-center">RIR Real</label>
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      min="0"
+                      max="10"
+                      value={editingSetV2.actualRir}
+                      onChange={(e) => setEditingSetV2({ ...editingSetV2, actualRir: e.target.value })}
+                      className="text-center text-xl font-bold h-14 bg-white/5 border-gray-700 text-white"
+                      placeholder="—"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block text-center">RPE</label>
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      min="1"
+                      max="10"
+                      value={editingSetV2.actualRpe}
+                      onChange={(e) => setEditingSetV2({ ...editingSetV2, actualRpe: e.target.value })}
+                      className="text-center text-xl font-bold h-14 bg-white/5 border-gray-700 text-white"
+                      placeholder="—"
+                    />
+                  </div>
+                </div>
+                
+                <div className="mb-6">
+                  <label className="text-xs text-gray-400 mb-1 block">Notas (opcional)</label>
+                  <Input
+                    value={editingSetV2.notes}
+                    onChange={(e) => setEditingSetV2({ ...editingSetV2, notes: e.target.value })}
+                    placeholder="Ej: Subí peso, último set difícil..."
+                    className="bg-white/5 border-gray-700"
+                  />
+                </div>
+                
+                <div className="space-y-3">
+                  <Button
+                    className="w-full h-14 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white font-bold text-lg rounded-xl"
+                    onClick={() => handleSaveSetV2("completed")}
+                  >
+                    <CheckCircle2 className="w-5 h-5 mr-2" />
+                    Guardar Serie
+                  </Button>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button 
+                      variant="outline" 
+                      className="h-12 text-red-400 border-red-400/30 hover:bg-red-500/10" 
+                      onClick={() => handleSaveSetV2("failed")}
+                    >
+                      Fallida
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      className="h-12 text-yellow-400 border-yellow-400/30 hover:bg-yellow-500/10" 
+                      onClick={() => handleSaveSetV2("skipped")}
+                    >
+                      Saltar
+                    </Button>
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    className="w-full text-gray-400" 
+                    onClick={() => setEditingSetV2(null)}
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* History Modal V2 */}
+        <AnimatePresence>
+          {historyExerciseV2 && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+              onClick={() => setHistoryExerciseV2(null)}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="w-full max-w-md bg-[#13131a] rounded-2xl max-h-[80vh] overflow-hidden border border-[#2a2a35]"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="p-4 border-b border-[#2a2a35] flex items-center justify-between">
+                  <div>
+                    <h3 className="font-bold text-white">💪 {historyExerciseV2.exerciseCatalog?.name || "Ejercicio"}</h3>
+                    <p className="text-xs text-gray-500">Historial de rendimiento</p>
+                  </div>
+                  <Button variant="ghost" size="icon" onClick={() => setHistoryExerciseV2(null)}>
+                    <X className="w-5 h-5 text-gray-400" />
+                  </Button>
+                </div>
+                <div className="p-4 max-h-[60vh] overflow-y-auto">
+                  {loadingHistory ? (
+                    <div className="space-y-3">
+                      <Skeleton className="h-16 w-full bg-[#1a1a24]" />
+                      <Skeleton className="h-16 w-full bg-[#1a1a24]" />
+                    </div>
+                  ) : historyData.length > 0 ? (
+                    <div className="space-y-3">
+                      {historyData.slice(0, 10).map((entry: any, idx: number) => {
+                        const sets = entry.sets || [];
+                        const maxLoad = sets.length > 0 ? Math.max(...sets.map((s: any) => s.load || s.actualLoad || 0)) : 0;
+                        const avgReps = sets.length > 0 
+                          ? Math.round(sets.reduce((acc: number, s: any) => acc + (parseInt(s.reps || s.actualReps) || 0), 0) / sets.length) 
+                          : 0;
+                        const avgRir = sets.length > 0 && sets.some((s: any) => s.actualRir != null)
+                          ? Math.round(sets.reduce((acc: number, s: any) => acc + (s.actualRir || 0), 0) / sets.filter((s: any) => s.actualRir != null).length)
+                          : null;
+                        
+                        return (
+                          <div key={idx} className="p-3 bg-[#1a1a24] rounded-lg border border-[#2a2a35]">
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="text-xs text-gray-500">
+                                {formatDate(entry.fecha || entry.date, { day: "2-digit", month: "2-digit", year: "2-digit" })}
+                              </span>
+                              <Badge variant="outline" className="text-xs border-gray-700 text-gray-400">{sets.length} series</Badge>
+                            </div>
+                            <div className="flex gap-4 text-sm">
+                              <div><span className="text-gray-500">Carga:</span> <span className="font-bold text-white">{maxLoad || "—"} kg</span></div>
+                              <div><span className="text-gray-500">Reps:</span> <span className="font-bold text-white">{avgReps || "—"}</span></div>
+                              <div><span className="text-gray-500">RIR:</span> <span className="font-bold text-green-400">{avgRir ?? "—"}</span></div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <History className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+                      <p className="text-gray-500">Aún no hay historial para este ejercicio</p>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Drop Set Edit Modal V2 */}
+        <AnimatePresence>
+          {editingDrop && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 z-50 flex items-end"
+              onClick={() => setEditingDrop(null)}
+            >
+              <motion.div
+                initial={{ y: "100%" }}
+                animate={{ y: 0 }}
+                exit={{ y: "100%" }}
+                transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                className="w-full bg-[#13131a] rounded-t-3xl p-6 pb-8 border-t border-orange-500/30"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="w-12 h-1 bg-orange-500/50 rounded-full mx-auto mb-4" />
+                <div className="mb-4">
+                  <h3 className="text-lg font-bold text-orange-400">
+                    Drop Set {editingDrop.dropIndex + 1}
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    {editingDrop.exercise.exerciseCatalog?.name || "Ejercicio"} - 
+                    Bajá el peso y seguí hasta el fallo
+                  </p>
+                </div>
+                
+                {/* REPS y CARGA para el drop */}
+                <div className="grid grid-cols-2 gap-3 mb-6">
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block text-center">REPS</label>
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      min="0"
+                      max="100"
+                      value={editingDrop.reps}
+                      onChange={(e) => setEditingDrop({ ...editingDrop, reps: e.target.value })}
+                      className="text-center text-xl font-bold h-14 bg-orange-500/10 border-orange-500/30 text-orange-400"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block text-center">CARGA (kg)</label>
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      step="0.5"
+                      value={editingDrop.load}
+                      onChange={(e) => setEditingDrop({ ...editingDrop, load: e.target.value })}
+                      className="text-center text-xl font-bold h-14 bg-white/5 border-gray-700 text-white"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-3">
+                  <Button
+                    className="w-full h-14 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-bold text-lg rounded-xl"
+                    onClick={handleSaveDropV2}
+                  >
+                    <CheckCircle2 className="w-5 h-5 mr-2" />
+                    Guardar Drop
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    className="w-full text-gray-400" 
+                    onClick={() => setEditingDrop(null)}
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Video Modal V2 */}
+        <AnimatePresence>
+          {showVideoV2 && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4"
+              onClick={() => setShowVideoV2(null)}
+            >
+              <Button variant="ghost" size="icon" className="absolute top-4 right-4 text-white" onClick={() => setShowVideoV2(null)}>
+                <X className="w-6 h-6" />
+              </Button>
+              <div className="w-full max-w-lg aspect-video">
+                <iframe
+                  src={showVideoV2.replace("watch?v=", "embed/")}
+                  className="w-full h-full rounded-xl"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    );
+  }
+
+  // ==================== RENDER V1 ====================
   if (!day) {
     return (
       <div className="min-h-screen bg-background">
@@ -493,10 +1430,10 @@ export default function WorkoutPage() {
                 <Button variant="outline" size="icon" onClick={() => setTimerRunning(!timerRunning)}>
                   {timerRunning ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                 </Button>
-                <Button variant="outline" size="icon" onClick={() => setTimerSeconds(120)}>
+                <Button variant="outline" size="icon" onClick={() => resetTimer(120)}>
                   <RotateCcw className="w-4 h-4" />
                 </Button>
-                <Button variant="ghost" size="icon" onClick={() => { setShowTimer(false); setTimerRunning(false); }}>
+                <Button variant="ghost" size="icon" onClick={stopTimer}>
                   <X className="w-4 h-4" />
                 </Button>
               </div>

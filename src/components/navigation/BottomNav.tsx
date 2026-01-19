@@ -23,7 +23,7 @@ const studentNav: NavItem[] = [
 const coachNav: NavItem[] = [
   { label: "Inicio", icon: Home, href: "/coach" },
   { label: "Alumnos", icon: Users, href: "/coach/students" },
-  { label: "Rutinas", icon: Dumbbell, href: "/coach/routines" },
+  { label: "Rutinas", icon: Dumbbell, href: "/coach/routines-v2" },
   { label: "Cuotas", icon: CreditCard, href: "/coach/fees" },
   { label: "Perfil", icon: User, href: "/coach/profile" },
 ];

@@ -596,7 +596,6 @@ export default function AddMeasurementsPage() {
           ref={fileInputRefs[type]}
           type="file"
           accept="image/*"
-          capture="environment"
           className="hidden"
           onChange={(e) => handlePhotoSelect(type, e)}
         />

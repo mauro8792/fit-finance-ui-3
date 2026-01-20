@@ -238,7 +238,7 @@ export default function TrainingHistoryPage() {
         historialCompleto.sort((a, b) => {
           const dateA = a.fecha ? new Date(a.fecha + "T12:00:00").getTime() : 0;
           const dateB = b.fecha ? new Date(b.fecha + "T12:00:00").getTime() : 0;
-          return dateB.getTime() - dateA.getTime();
+          return dateB - dateA;
         });
 
         // Guardar en cache

@@ -373,12 +373,22 @@ export default function AddMeasurementsPage() {
     return () => clearTimeout(timeoutId);
   }, [basicos, perimetros, pliegues, photos, notes, dateDisplay, saveDraft]);
 
-  // Refs para inputs de archivo
+  // Refs para inputs de archivo (galería)
   const fileInputRefs = {
     front: useRef<HTMLInputElement>(null),
     side: useRef<HTMLInputElement>(null),
     back: useRef<HTMLInputElement>(null),
   };
+
+  // Refs para inputs de cámara
+  const cameraInputRefs = {
+    front: useRef<HTMLInputElement>(null),
+    side: useRef<HTMLInputElement>(null),
+    back: useRef<HTMLInputElement>(null),
+  };
+
+  // Estado para mostrar menú de selección de foto
+  const [photoMenuOpen, setPhotoMenuOpen] = useState<PhotoType | null>(null);
 
   // Calcular suma de pliegues
   const sumaPliegues = useMemo(() => {
@@ -589,15 +599,32 @@ export default function AddMeasurementsPage() {
   // Componente de upload de foto
   const PhotoUpload = ({ type, label }: { type: PhotoType; label: string }) => {
     const photo = photos[type];
+    const isMenuOpen = photoMenuOpen === type;
 
     return (
-      <div className="flex flex-col items-center gap-2">
+      <div className="flex flex-col items-center gap-2 relative">
+        {/* Input para galería */}
         <input
           ref={fileInputRefs[type]}
           type="file"
           accept="image/*"
           className="hidden"
-          onChange={(e) => handlePhotoSelect(type, e)}
+          onChange={(e) => {
+            handlePhotoSelect(type, e);
+            setPhotoMenuOpen(null);
+          }}
+        />
+        {/* Input para cámara */}
+        <input
+          ref={cameraInputRefs[type]}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={(e) => {
+            handlePhotoSelect(type, e);
+            setPhotoMenuOpen(null);
+          }}
         />
 
         <motion.div
@@ -609,7 +636,15 @@ export default function AddMeasurementsPage() {
               ? "border-primary bg-primary/10"
               : "border-border hover:border-primary/50 bg-surface/50"
           )}
-          onClick={() => fileInputRefs[type].current?.click()}
+          onClick={() => {
+            if (photo) {
+              // Si ya hay foto, abrir menú para reemplazar
+              setPhotoMenuOpen(isMenuOpen ? null : type);
+            } else {
+              // Si no hay foto, mostrar menú de opciones
+              setPhotoMenuOpen(isMenuOpen ? null : type);
+            }
+          }}
         >
           {photo ? (
             <>
@@ -622,6 +657,7 @@ export default function AddMeasurementsPage() {
                 onClick={(e) => {
                   e.stopPropagation();
                   removePhoto(type);
+                  setPhotoMenuOpen(null);
                 }}
                 className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 flex items-center justify-center"
               >
@@ -640,6 +676,50 @@ export default function AddMeasurementsPage() {
             </div>
           )}
         </motion.div>
+
+        {/* Menú de selección */}
+        <AnimatePresence>
+          {isMenuOpen && (
+            <>
+              {/* Overlay para cerrar el menú */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-40"
+                onClick={() => setPhotoMenuOpen(null)}
+              />
+              <motion.div
+                initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                className="absolute top-full mt-2 z-50 bg-surface border border-border rounded-xl shadow-xl overflow-hidden min-w-[160px]"
+              >
+                <button
+                  className="w-full px-4 py-3 text-left text-sm hover:bg-primary/10 flex items-center gap-3 transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    cameraInputRefs[type].current?.click();
+                  }}
+                >
+                  <Camera className="w-5 h-5 text-primary" />
+                  <span>Tomar foto</span>
+                </button>
+                <div className="border-t border-border" />
+                <button
+                  className="w-full px-4 py-3 text-left text-sm hover:bg-primary/10 flex items-center gap-3 transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    fileInputRefs[type].current?.click();
+                  }}
+                >
+                  <ImageIcon className="w-5 h-5 text-accent" />
+                  <span>Elegir de galería</span>
+                </button>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
       </div>
     );
   };

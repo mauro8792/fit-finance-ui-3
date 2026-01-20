@@ -236,7 +236,6 @@ export default function StudentRoutinePage() {
                   <span>Rutinas pendientes de asignar a macrociclo</span>
                 </div>
                 {routinesV2.filter(r => !r.macrocycleId).map((routine) => {
-                  const isExpanded = expandedRoutineV2 === routine.id;
                   const isActive = routine.status === 'active';
                   const isScheduled = routine.status === 'scheduled';
                   
@@ -248,15 +247,13 @@ export default function StudentRoutinePage() {
                         isActive && "border-primary/30 bg-primary/5"
                       )}
                     >
-                      <CardHeader
-                        className="p-4 cursor-pointer touch-feedback"
-                        onClick={() => setExpandedRoutineV2(isExpanded ? null : routine.id)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
+                      <CardContent className="p-4 space-y-3">
+                        {/* Fila 1: Info */}
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-start gap-3">
                             <div
                               className={cn(
-                                "w-10 h-10 rounded-lg flex items-center justify-center",
+                                "w-10 h-10 rounded-lg flex items-center justify-center shrink-0",
                                 isActive ? "bg-primary/20" : "bg-accent/20"
                               )}
                             >
@@ -268,136 +265,84 @@ export default function StudentRoutinePage() {
                               />
                             </div>
                             <div>
-                              <CardTitle className="text-base">{routine.name}</CardTitle>
-                              <p className="text-xs text-text-muted">
+                              <p className="font-medium text-text">{routine.name}</p>
+                              <p className="text-xs text-text-muted mt-1">
                                 {routine.microcycles?.length || 0} microciclos
                               </p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <Badge 
-                              className={cn(
-                                "text-xs",
-                                isActive && "bg-green-500/20 text-green-400",
-                                isScheduled && "bg-blue-500/20 text-blue-400",
-                                routine.status === 'completed' && "bg-gray-500/20 text-gray-400"
-                              )}
-                            >
-                              {isActive ? "Activa" : isScheduled ? "Programada" : "Completada"}
-                            </Badge>
-                            <ChevronDown
-                              className={cn(
-                                "w-5 h-5 text-text-muted transition-transform",
-                                isExpanded && "rotate-180"
-                              )}
-                            />
-                          </div>
-                        </div>
-                      </CardHeader>
-
-                      <AnimatePresence>
-                        {isExpanded && (
-                          <motion.div
-                            initial={{ height: 0 }}
-                            animate={{ height: "auto" }}
-                            exit={{ height: 0 }}
-                            className="overflow-hidden"
+                          <Badge 
+                            className={cn(
+                              "text-xs shrink-0",
+                              isActive && "bg-green-500/20 text-green-400",
+                              isScheduled && "bg-blue-500/20 text-blue-400",
+                              routine.status === 'completed' && "bg-gray-500/20 text-gray-400"
+                            )}
                           >
-                            <CardContent className="p-4 pt-0 border-t border-border space-y-3">
-                              {/* Info */}
-                              {routine.objective && (
-                                <p className="text-sm text-text-muted">{routine.objective}</p>
-                              )}
-                              
-                              {/* Microcycles */}
-                              <div className="space-y-2">
-                                {routine.microcycles?.slice().sort((a, b) => a.order - b.order).map((micro) => {
-                                  // Solo mostrar nombre si es diferente a "M{order}" o "Semana {order}"
-                                  const isGenericName = 
-                                    micro.name === `M${micro.order}` || 
-                                    micro.name === `Semana ${micro.order}` ||
-                                    micro.name === `Microciclo ${micro.order}`;
-                                  
-                                  return (
-                                    <div
-                                      key={micro.id}
-                                      className="p-3 bg-background/50 rounded-lg flex items-center justify-between"
-                                    >
-                                      <div className="flex items-center gap-2">
-                                        <Badge variant="outline" className="text-xs">
-                                          M{micro.order}
-                                        </Badge>
-                                        {!isGenericName && micro.name && (
-                                          <span className="text-sm">{micro.name}</span>
-                                        )}
-                                        {micro.isDeload && (
-                                          <Badge className="bg-blue-500/20 text-blue-400 text-[10px]">
-                                            Descarga
-                                          </Badge>
-                                        )}
-                                      </div>
-                                      <span className="text-xs text-text-muted">
-                                        {micro.days?.length || 0} días
-                                      </span>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-
-                              {/* Actions */}
-                              <div className="flex gap-2 pt-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="flex-1"
-                                  onClick={() => router.push(`/coach/student-routine-v2/${routine.id}`)}
-                                >
-                                  <Edit className="w-4 h-4 mr-1" />
-                                  Ver detalles
-                                </Button>
-                                {isScheduled && (
-                                  <Button
-                                    size="sm"
-                                    className="flex-1 bg-primary text-black"
-                                    onClick={() => {
-                                      setRoutineToActivate(routine);
-                                      setSelectedMacrocycleId(null);
-                                      setNewMacrocycleName(routine.name || "");
-                                      setShowActivateModal(true);
-                                    }}
-                                  >
-                                    <Play className="w-4 h-4 mr-1" />
-                                    Activar
-                                  </Button>
-                                )}
-                                {isActive && (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="flex-1 border-yellow-500/50 text-yellow-500 hover:bg-yellow-500/10"
-                                    onClick={async () => {
-                                      try {
-                                        await routineV2Api.deactivateRoutine(routine.id);
-                                        toast.success("Rutina desactivada", {
-                                          description: "La rutina volvió a estado programada"
-                                        });
-                                      } catch (error) {
-                                        console.error("Error deactivate:", error);
-                                        toast.error("Error al desactivar la rutina");
-                                      } finally {
-                                        refreshData();
-                                      }
-                                    }}
-                                  >
-                                    <Pause className="w-4 h-4 mr-1" />
-                                    Desactivar
-                                  </Button>
-                                )}
-                              </div>
-                            </CardContent>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
+                            {isActive ? "✓ Activo" : isScheduled ? "Programada" : "Completada"}
+                          </Badge>
+                        </div>
+                        
+                        {/* Fila 2: Acciones */}
+                        <div className="flex items-center gap-2">
+                          {/* Botón Activar */}
+                          {isScheduled && (
+                            <Button
+                              size="sm"
+                              className="flex-1 bg-primary text-black"
+                              onClick={() => {
+                                setRoutineToActivate(routine);
+                                setSelectedMacrocycleId(null);
+                                setNewMacrocycleName(routine.name || "");
+                                setShowActivateModal(true);
+                              }}
+                            >
+                              <Play className="w-4 h-4 mr-2" />
+                              Activar
+                            </Button>
+                          )}
+                          {/* Botón Pausar */}
+                          {isActive && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="flex-1 border-yellow-500/50 text-yellow-500 hover:bg-yellow-500/10"
+                              onClick={async () => {
+                                try {
+                                  await routineV2Api.deactivateRoutine(routine.id);
+                                  toast.success("Rutina desactivada");
+                                  refreshData();
+                                } catch (error) {
+                                  console.error("Error deactivate:", error);
+                                  toast.error("Error al desactivar");
+                                }
+                              }}
+                            >
+                              <Pause className="w-4 h-4 mr-2" />
+                              Pausar
+                            </Button>
+                          )}
+                          {/* Botón Editar */}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="flex-1"
+                            onClick={() => router.push(`/coach/student-routine-v2/${routine.id}/edit`)}
+                          >
+                            <Edit className="w-4 h-4 mr-2" />
+                            Editar
+                          </Button>
+                          {/* Botón Ver */}
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="w-10 h-10"
+                            onClick={() => router.push(`/coach/student-routine-v2/${routine.id}`)}
+                          >
+                            <ChevronRight className="w-5 h-5" />
+                          </Button>
+                        </div>
+                      </CardContent>
                     </Card>
                   );
                 })}
@@ -630,162 +575,101 @@ export default function StudentRoutinePage() {
                                 {macroRoutinesV2.map((routineV2) => {
                                   const isV2Active = routineV2.status === 'active';
                                   const isV2Scheduled = routineV2.status === 'scheduled';
-                                  const isV2Expanded = expandedRoutineV2 === routineV2.id;
                                   
                                   return (
-                                    <div key={routineV2.id}>
-                                      <div
-                                        className="p-4 flex items-center justify-between cursor-pointer touch-feedback bg-primary/5"
-                                        onClick={() => setExpandedRoutineV2(isV2Expanded ? null : routineV2.id)}
-                                      >
-                                        <div className="flex items-center gap-3">
-                                          <Sparkles className="w-4 h-4 text-primary" />
+                                    <div 
+                                      key={routineV2.id}
+                                      className="p-4 bg-primary/5 border-b border-border space-y-3"
+                                    >
+                                      {/* Fila 1: Nombre + Badge */}
+                                      <div className="flex items-start justify-between">
+                                        <div className="flex items-start gap-3">
+                                          <Calendar className="w-5 h-5 text-primary mt-0.5" />
                                           <div>
-                                            <div className="flex items-center gap-2">
-                                              <p className="font-medium text-text text-sm">
-                                                {routineV2.name}
-                                              </p>
-                                              <Badge 
-                                                variant="outline" 
-                                                className={cn(
-                                                  "text-[10px] px-1.5 py-0",
-                                                  isV2Active && "bg-green-500/20 text-green-400 border-green-500/30",
-                                                  isV2Scheduled && "bg-blue-500/20 text-blue-400 border-blue-500/30",
-                                                  routineV2.status === 'completed' && "bg-gray-500/20 text-gray-400 border-gray-500/30"
-                                                )}
-                                              >
-                                                {isV2Active ? "✓ Activa" : isV2Scheduled ? "📅 Programada" : "✔️ Completada"}
-                                              </Badge>
-                                            </div>
-                                            <p className="text-xs text-text-muted">
+                                            <p className="font-medium text-text">
+                                              {routineV2.name}
+                                            </p>
+                                            <p className="text-xs text-text-muted mt-1">
                                               {routineV2.microcycles?.length || 0} microciclos
                                             </p>
                                           </div>
                                         </div>
-                                        <div className="flex items-center gap-2">
+                                        <Badge 
+                                          variant="outline" 
+                                          className={cn(
+                                            "text-xs shrink-0",
+                                            isV2Active && "bg-green-500/20 text-green-400 border-green-500/30",
+                                            isV2Scheduled && "bg-blue-500/20 text-blue-400 border-blue-500/30",
+                                            routineV2.status === 'completed' && "bg-gray-500/20 text-gray-400 border-gray-500/30"
+                                          )}
+                                        >
+                                          {isV2Active ? "✓ Activo" : isV2Scheduled ? "Programada" : "Completada"}
+                                        </Badge>
+                                      </div>
+                                      
+                                      {/* Fila 2: Acciones */}
+                                      <div className="flex items-center gap-2">
+                                        {/* Botón Activar */}
+                                        {isV2Scheduled && (
                                           <Button
-                                            size="icon"
-                                            variant="ghost"
-                                            className="w-8 h-8"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              router.push(`/coach/student-routine-v2/${routineV2.id}`);
+                                            size="sm"
+                                            className="flex-1 bg-primary text-black"
+                                            onClick={async () => {
+                                              try {
+                                                await routineV2Api.activateRoutine(routineV2.id, macro.id);
+                                                toast.success("¡Rutina activada!");
+                                                refreshData();
+                                              } catch (error) {
+                                                console.error("Error activate:", error);
+                                                toast.error("Error al activar");
+                                              }
                                             }}
                                           >
-                                            <Edit className="w-4 h-4" />
+                                            <Play className="w-4 h-4 mr-2" />
+                                            Activar
                                           </Button>
-                                          <ChevronRight
-                                            className={cn(
-                                              "w-4 h-4 text-text-muted transition-transform",
-                                              isV2Expanded && "rotate-90"
-                                            )}
-                                          />
-                                        </div>
-                                      </div>
-
-                                      {/* Microciclos de la rutina v2 */}
-                                      <AnimatePresence>
-                                        {isV2Expanded && (
-                                          <motion.div
-                                            initial={{ height: 0 }}
-                                            animate={{ height: "auto" }}
-                                            exit={{ height: 0 }}
-                                            className="overflow-hidden"
-                                          >
-                                            <div className="px-4 pb-4 space-y-2 bg-primary/5">
-                                              {routineV2.microcycles?.slice().sort((a, b) => a.order - b.order).map((micro) => {
-                                                const isGenericName = 
-                                                  micro.name === `M${micro.order}` || 
-                                                  micro.name === `Semana ${micro.order}` ||
-                                                  micro.name === `Microciclo ${micro.order}`;
-                                                
-                                                return (
-                                                  <div
-                                                    key={micro.id}
-                                                    className="p-3 bg-background/50 rounded-lg flex items-center justify-between"
-                                                  >
-                                                    <div className="flex items-center gap-2">
-                                                      <Badge variant="outline" className="text-xs">
-                                                        M{micro.order}
-                                                      </Badge>
-                                                      {!isGenericName && micro.name && (
-                                                        <span className="text-sm">{micro.name}</span>
-                                                      )}
-                                                      {micro.isDeload && (
-                                                        <Badge className="bg-blue-500/20 text-blue-400 text-[10px]">
-                                                          Descarga
-                                                        </Badge>
-                                                      )}
-                                                    </div>
-                                                    <span className="text-xs text-text-muted">
-                                                      {micro.days?.length || 0} días
-                                                    </span>
-                                                  </div>
-                                                );
-                                              })}
-                                              
-                                              {/* Acciones de la rutina V2 */}
-                                              <div className="flex gap-2 pt-2 mt-2 border-t border-border/50">
-                                                <Button
-                                                  size="sm"
-                                                  variant="outline"
-                                                  className="flex-1"
-                                                  onClick={() => router.push(`/coach/student-routine-v2/${routineV2.id}`)}
-                                                >
-                                                  <Edit className="w-4 h-4 mr-1" />
-                                                  Ver detalles
-                                                </Button>
-                                                {isV2Active && (
-                                                  <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    className="flex-1 border-yellow-500/50 text-yellow-500 hover:bg-yellow-500/10"
-                                                    onClick={async () => {
-                                                      try {
-                                                        await routineV2Api.deactivateRoutine(routineV2.id);
-                                                        toast.success("Rutina desactivada", {
-                                                          description: "La rutina volvió a estado programada"
-                                                        });
-                                                      } catch (error) {
-                                                        console.error("Error deactivate:", error);
-                                                        toast.error("Error al desactivar la rutina");
-                                                      } finally {
-                                                        refreshData();
-                                                      }
-                                                    }}
-                                                  >
-                                                    <Pause className="w-4 h-4 mr-1" />
-                                                    Desactivar
-                                                  </Button>
-                                                )}
-                                                {isV2Scheduled && (
-                                                  <Button
-                                                    size="sm"
-                                                    className="flex-1 bg-primary text-black"
-                                                    onClick={async () => {
-                                                      try {
-                                                        // Ya está en un macrociclo, activar directamente
-                                                        await routineV2Api.activateRoutine(routineV2.id, macro.id);
-                                                        toast.success("¡Rutina activada!", {
-                                                          description: "El alumno ya puede empezar a entrenar"
-                                                        });
-                                                      } catch (error) {
-                                                        console.error("Error activate:", error);
-                                                        toast.error("Error al activar la rutina");
-                                                      } finally {
-                                                        refreshData();
-                                                      }
-                                                    }}
-                                                  >
-                                                    <Play className="w-4 h-4 mr-1" />
-                                                    Activar
-                                                  </Button>
-                                                )}
-                                              </div>
-                                            </div>
-                                          </motion.div>
                                         )}
-                                      </AnimatePresence>
+                                        {/* Botón Pausar */}
+                                        {isV2Active && (
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="flex-1 border-yellow-500/50 text-yellow-500 hover:bg-yellow-500/10"
+                                            onClick={async () => {
+                                              try {
+                                                await routineV2Api.deactivateRoutine(routineV2.id);
+                                                toast.success("Rutina desactivada");
+                                                refreshData();
+                                              } catch (error) {
+                                                console.error("Error deactivate:", error);
+                                                toast.error("Error al desactivar");
+                                              }
+                                            }}
+                                          >
+                                            <Pause className="w-4 h-4 mr-2" />
+                                            Pausar
+                                          </Button>
+                                        )}
+                                        {/* Botón Editar */}
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="flex-1"
+                                          onClick={() => router.push(`/coach/student-routine-v2/${routineV2.id}/edit`)}
+                                        >
+                                          <Edit className="w-4 h-4 mr-2" />
+                                          Editar
+                                        </Button>
+                                        {/* Botón Ver */}
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          className="w-10 h-10"
+                                          onClick={() => router.push(`/coach/student-routine-v2/${routineV2.id}`)}
+                                        >
+                                          <ChevronRight className="w-5 h-5" />
+                                        </Button>
+                                      </div>
                                     </div>
                                   );
                                 })}

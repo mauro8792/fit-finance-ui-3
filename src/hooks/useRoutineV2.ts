@@ -310,6 +310,7 @@ export function useAssignedStudents(templateId: string | null) {
 interface UseStudentRoutineState {
   routine: StudentMesocycle | null;
   loading: boolean;
+  refreshing: boolean;
   error: string | null;
 }
 
@@ -317,22 +318,32 @@ export function useStudentRoutine(routineId: string | null) {
   const [state, setState] = useState<UseStudentRoutineState>({
     routine: null,
     loading: !!routineId,
+    refreshing: false,
     error: null,
   });
 
-  const fetchRoutine = useCallback(async () => {
+  const fetchRoutine = useCallback(async (silent = false) => {
     if (!routineId) return;
-    setState((prev) => ({ ...prev, loading: true, error: null }));
+    
+    setState((prev) => {
+      // Si es silent y ya hay datos, solo marcamos refreshing (sin spinner)
+      if (silent && prev.routine) {
+        return { ...prev, refreshing: true, error: null };
+      }
+      return { ...prev, loading: true, error: null };
+    });
+    
     try {
       const routine = await routineV2Api.getStudentRoutine(routineId);
-      setState({ routine, loading: false, error: null });
+      setState({ routine, loading: false, refreshing: false, error: null });
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Error al cargar rutina';
-      setState((prev) => ({ ...prev, loading: false, error: errorMessage }));
+      setState((prev) => ({ ...prev, loading: false, refreshing: false, error: errorMessage }));
     }
   }, [routineId]);
 
-  const refetch = useCallback(() => fetchRoutine(), [fetchRoutine]);
+  // refetch silencioso - no muestra spinner si ya hay datos
+  const refetch = useCallback(() => fetchRoutine(true), [fetchRoutine]);
 
   const logSet = useCallback(
     async (setId: string, dto: { actualReps: number; actualLoad?: number; actualRir?: number; notes?: string }) => {
@@ -354,7 +365,7 @@ export function useStudentRoutine(routineId: string | null) {
     if (routineId) fetchRoutine();
   }, [routineId, fetchRoutine]);
 
-  return { ...state, refetch, logSet, completeDay };
+  return { ...state, refetch, logSet, completeDay, fetchRoutine };
 }
 
 // ========== ACTIVE ROUTINE HOOK ==========
@@ -363,6 +374,7 @@ export function useActiveRoutine(studentId: number | null) {
   const [state, setState] = useState<UseStudentRoutineState>({
     routine: null,
     loading: !!studentId,
+    refreshing: false,
     error: null,
   });
 
@@ -371,10 +383,10 @@ export function useActiveRoutine(studentId: number | null) {
     setState((prev) => ({ ...prev, loading: true, error: null }));
     try {
       const routine = await routineV2Api.getActiveRoutine(studentId);
-      setState({ routine, loading: false, error: null });
+      setState({ routine, loading: false, refreshing: false, error: null });
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Error al cargar rutina activa';
-      setState((prev) => ({ ...prev, loading: false, error: errorMessage }));
+      setState((prev) => ({ ...prev, loading: false, refreshing: false, error: errorMessage }));
     }
   }, [studentId]);
 

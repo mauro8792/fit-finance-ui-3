@@ -40,6 +40,29 @@ export const createTemplate = async (dto: CreateTemplateDto): Promise<MesocycleT
   return data;
 };
 
+export interface CreateTemplateCompleteDto {
+  name: string;
+  description?: string;
+  objective?: string;
+  tags?: string[];
+  microcycles: {
+    name: string;
+    weekNumber: number;
+    isDeload?: boolean;
+    days: {
+      name: string;
+      isRestDay?: boolean;
+    }[];
+  }[];
+  autoPublish?: boolean;
+  assignToStudentId?: number;
+}
+
+export const createTemplateComplete = async (dto: CreateTemplateCompleteDto): Promise<MesocycleTemplate> => {
+  const { data } = await api.post(`${BASE_URL}/complete`, dto);
+  return data;
+};
+
 export const updateTemplate = async (id: string, dto: UpdateTemplateDto): Promise<MesocycleTemplate> => {
   const { data } = await api.patch(`${BASE_URL}/${id}`, dto);
   return data;
@@ -170,7 +193,7 @@ export const getActiveRoutine = async (studentId: number): Promise<StudentMesocy
   return data;
 };
 
-export const activateRoutine = async (id: string, macrocycleId?: number): Promise<StudentMesocycle> => {
+export const activateRoutine = async (id: string, macrocycleId: number): Promise<StudentMesocycle> => {
   const { data } = await api.post(`${STUDENT_BASE_URL}/${id}/activate`, { macrocycleId });
   return data;
 };
@@ -187,6 +210,17 @@ export const deactivateRoutine = async (id: string): Promise<StudentMesocycle> =
 
 export const deleteStudentRoutine = async (id: string): Promise<void> => {
   await api.delete(`${STUDENT_BASE_URL}/${id}`);
+};
+
+/**
+ * Actualizar una rutina del estudiante (nombre, macrocycleId, etc.)
+ */
+export const updateStudentRoutine = async (
+  id: string, 
+  dto: { name?: string; description?: string; objective?: string; macrocycleId?: number }
+): Promise<StudentMesocycle> => {
+  const { data } = await api.patch(`${STUDENT_BASE_URL}/${id}`, dto);
+  return data;
 };
 
 /**
@@ -209,6 +243,30 @@ export const getMyDay = async (dayId: string): Promise<StudentDay> => {
 
 export const addStudentExercise = async (dayId: string, dto: AddExerciseDto): Promise<StudentExercise> => {
   const { data } = await api.post(`${STUDENT_BASE_URL}/days/${dayId}/exercises`, dto);
+  return data;
+};
+
+export interface AddExerciseWithSetsDto {
+  exerciseCatalogId: number;
+  targetReps?: string;
+  restSeconds?: number;
+  targetRir?: number;
+  targetRpe?: number;
+  coachNotes?: string;
+  sets: {
+    targetReps?: string;
+    targetLoad?: number;
+    targetRir?: number;
+    targetRpe?: number;
+    isDropSet?: boolean;
+  }[];
+}
+
+/**
+ * Agregar un ejercicio con todos sus sets en una sola llamada (batch insert)
+ */
+export const addStudentExerciseWithSets = async (dayId: string, dto: AddExerciseWithSetsDto): Promise<StudentExercise> => {
+  const { data } = await api.post(`${STUDENT_BASE_URL}/days/${dayId}/exercises-with-sets`, dto);
   return data;
 };
 

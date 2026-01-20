@@ -15,8 +15,12 @@ import {
   SheetHeader,
   SheetTitle,
   SheetDescription,
+  SheetFooter,
 } from "@/components/ui/sheet";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import api from "@/lib/api";
 import {
   Dumbbell,
   Calendar,
@@ -32,10 +36,14 @@ import {
   Flame,
   ArrowDownToLine,
   Trash2,
+  FolderPlus,
+  Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import * as routineV2Api from "@/lib/api/routine-v2";
+import { getMacrocyclesByStudent } from "@/lib/api/routine";
 import type { StudentMesocycle, StudentMicrocycle, StudentDay, StudentExercise } from "@/types/routine-v2";
+import type { Macrocycle } from "@/types";
 
 export default function StudentRoutineV2DetailPage() {
   const router = useRouter();
@@ -53,6 +61,15 @@ export default function StudentRoutineV2DetailPage() {
   const [showDaySheet, setShowDaySheet] = useState(false);
   const [selectedDay, setSelectedDay] = useState<StudentDay | null>(null);
   const [selectedMicroName, setSelectedMicroName] = useState("");
+  
+  // Modal para vincular/activar con macrociclo
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [showActivateModal, setShowActivateModal] = useState(false);
+  const [macrocycles, setMacrocycles] = useState<Macrocycle[]>([]);
+  const [loadingMacrocycles, setLoadingMacrocycles] = useState(false);
+  const [linking, setLinking] = useState(false);
+  const [selectedMacrocycleId, setSelectedMacrocycleId] = useState<number | "new" | null>(null);
+  const [newMacrocycleName, setNewMacrocycleName] = useState("");
 
   useEffect(() => {
     const loadRoutine = async () => {
@@ -78,12 +95,54 @@ export default function StudentRoutineV2DetailPage() {
     }
   }, [routineId]);
 
-  const handleActivate = async () => {
+  // Abrir modal de activación
+  const openActivateModal = async () => {
     if (!routine) return;
+    setShowActivateModal(true);
+    setSelectedMacrocycleId(null);
+    setNewMacrocycleName(routine.name || "");
+    setLoadingMacrocycles(true);
+    try {
+      const data = await getMacrocyclesByStudent(routine.studentId);
+      setMacrocycles(data);
+    } catch (err) {
+      console.error("Error loading macrocycles:", err);
+    } finally {
+      setLoadingMacrocycles(false);
+    }
+  };
+
+  // Activar con macrociclo
+  const handleActivateWithMacrocycle = async () => {
+    if (!routine || !selectedMacrocycleId) {
+      toast.error("Seleccioná un macrociclo");
+      return;
+    }
+
     setActivating(true);
     try {
-      await routineV2Api.activateRoutine(routine.id);
-      toast.success("Rutina activada");
+      let macrocycleId: number;
+      
+      if (selectedMacrocycleId === "new") {
+        // Crear nuevo macrociclo
+        const newMacro = await api.post("/macrocycle", {
+          name: newMacrocycleName || routine.name,
+          studentId: routine.studentId,
+          startDate: new Date().toISOString().split('T')[0],
+        });
+        macrocycleId = newMacro.data.id;
+      } else {
+        macrocycleId = selectedMacrocycleId;
+      }
+
+      await routineV2Api.activateRoutine(routine.id, macrocycleId);
+      toast.success("¡Rutina activada!", {
+        description: selectedMacrocycleId === "new" 
+          ? `Se creó el macrociclo "${newMacrocycleName || routine.name}"`
+          : "Rutina activada y vinculada al macrociclo"
+      });
+      
+      setShowActivateModal(false);
       // Recargar
       const data = await routineV2Api.getStudentRoutine(routineId);
       setRoutine(data);
@@ -121,6 +180,39 @@ export default function StudentRoutineV2DetailPage() {
     setSelectedDay(day);
     setSelectedMicroName(microName);
     setShowDaySheet(true);
+  };
+
+  const openLinkModal = async () => {
+    if (!routine) return;
+    setShowLinkModal(true);
+    setLoadingMacrocycles(true);
+    try {
+      const data = await getMacrocyclesByStudent(routine.studentId);
+      setMacrocycles(data);
+    } catch (err) {
+      console.error("Error loading macrocycles:", err);
+      toast.error("Error al cargar macrociclos");
+    } finally {
+      setLoadingMacrocycles(false);
+    }
+  };
+
+  const handleLinkToMacrocycle = async (macrocycleId: number) => {
+    if (!routine) return;
+    setLinking(true);
+    try {
+      await routineV2Api.updateStudentRoutine(routine.id, { macrocycleId });
+      toast.success("Rutina vinculada al macrociclo");
+      setShowLinkModal(false);
+      // Recargar rutina
+      const data = await routineV2Api.getStudentRoutine(routineId);
+      setRoutine(data);
+    } catch (err) {
+      console.error("Error linking:", err);
+      toast.error("Error al vincular");
+    } finally {
+      setLinking(false);
+    }
   };
 
   if (loading) {
@@ -241,23 +333,25 @@ export default function StudentRoutineV2DetailPage() {
           {isScheduled && (
             <Button
               className="flex-1 h-12 bg-primary text-black"
-              onClick={handleActivate}
-              disabled={activating}
+              onClick={openActivateModal}
             >
-              {activating ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Activando...
-                </>
-              ) : (
-                <>
-                  <Play className="w-4 h-4 mr-2" />
-                  Activar Rutina
-                </>
-              )}
+              <Play className="w-4 h-4 mr-2" />
+              Activar Rutina
             </Button>
           )}
         </div>
+
+        {/* Vincular a macrociclo si no tiene */}
+        {!routine.macrocycleId && (
+          <Button
+            variant="outline"
+            className="w-full h-10 text-accent border-accent/30 hover:bg-accent/10"
+            onClick={openLinkModal}
+          >
+            <ArrowDownToLine className="w-4 h-4 mr-2" />
+            Vincular a Macrociclo
+          </Button>
+        )}
 
         {/* Delete button - para rutinas programadas o sin macrociclo */}
         {(isScheduled || !routine.macrocycleId) && (
@@ -411,6 +505,203 @@ export default function StudentRoutineV2DetailPage() {
               </div>
             )}
           </ScrollArea>
+        </SheetContent>
+      </Sheet>
+
+      {/* Sheet para vincular a macrociclo */}
+      <Sheet open={showLinkModal} onOpenChange={setShowLinkModal}>
+        <SheetContent side="bottom" className="h-[60vh] bg-background rounded-t-2xl">
+          <SheetHeader className="pb-4">
+            <SheetTitle className="flex items-center gap-2">
+              <ArrowDownToLine className="w-5 h-5 text-accent" />
+              Vincular a Macrociclo
+            </SheetTitle>
+            <SheetDescription>
+              Seleccioná un macrociclo para vincular esta rutina
+            </SheetDescription>
+          </SheetHeader>
+
+          <ScrollArea className="h-[calc(100%-100px)]">
+            {loadingMacrocycles ? (
+              <div className="space-y-3">
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+              </div>
+            ) : macrocycles.length === 0 ? (
+              <div className="text-center py-8 text-text-muted">
+                <Target className="w-12 h-12 mx-auto mb-4 opacity-30" />
+                <p>No hay macrociclos disponibles</p>
+                <p className="text-xs mt-2">
+                  Podés crear uno desde la vista de rutinas del alumno
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3 pb-8">
+                {macrocycles.map((macro) => (
+                  <Card
+                    key={macro.id}
+                    className="bg-surface/80 border-border cursor-pointer hover:bg-surface transition-colors"
+                    onClick={() => !linking && handleLinkToMacrocycle(macro.id)}
+                  >
+                    <CardContent className="p-4 flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">{macro.name}</p>
+                        <p className="text-xs text-text-muted">
+                          {macro.mesocycles?.length || 0} mesociclos
+                        </p>
+                      </div>
+                      {linking ? (
+                        <Loader2 className="w-5 h-5 animate-spin text-accent" />
+                      ) : (
+                        <ChevronRight className="w-5 h-5 text-text-muted" />
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+        </SheetContent>
+      </Sheet>
+
+      {/* Sheet para activar con macrociclo */}
+      <Sheet open={showActivateModal} onOpenChange={setShowActivateModal}>
+        <SheetContent side="bottom" className="h-auto max-h-[80vh] bg-background rounded-t-2xl">
+          <SheetHeader className="pb-4">
+            <SheetTitle className="flex items-center gap-2">
+              <Play className="w-5 h-5 text-primary" />
+              Activar Rutina
+            </SheetTitle>
+            <SheetDescription>
+              Seleccioná a qué macrociclo pertenecerá esta rutina
+            </SheetDescription>
+          </SheetHeader>
+
+          {loadingMacrocycles ? (
+            <div className="space-y-3 py-4">
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-16 w-full" />
+            </div>
+          ) : (
+            <div className="space-y-4 pb-4">
+              {/* Opción: Crear nuevo macrociclo */}
+              <div
+                className={cn(
+                  "p-4 rounded-lg border-2 cursor-pointer transition-all",
+                  selectedMacrocycleId === "new"
+                    ? "border-primary bg-primary/10"
+                    : "border-border hover:border-primary/50"
+                )}
+                onClick={() => setSelectedMacrocycleId("new")}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    "w-10 h-10 rounded-lg flex items-center justify-center",
+                    selectedMacrocycleId === "new" ? "bg-primary/20" : "bg-surface"
+                  )}>
+                    <FolderPlus className={cn(
+                      "w-5 h-5",
+                      selectedMacrocycleId === "new" ? "text-primary" : "text-text-muted"
+                    )} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-medium">Crear nuevo macrociclo</p>
+                    <p className="text-xs text-text-muted">
+                      Se creará un nuevo macrociclo para esta rutina
+                    </p>
+                  </div>
+                  {selectedMacrocycleId === "new" && (
+                    <Check className="w-5 h-5 text-primary" />
+                  )}
+                </div>
+                
+                {selectedMacrocycleId === "new" && (
+                  <div className="mt-3 pt-3 border-t border-border">
+                    <Label htmlFor="activateNewMacroName" className="text-sm">
+                      Nombre del macrociclo
+                    </Label>
+                    <Input
+                      id="activateNewMacroName"
+                      value={newMacrocycleName}
+                      onChange={(e) => setNewMacrocycleName(e.target.value)}
+                      placeholder="Ej: Bloque de Hipertrofia 2026"
+                      className="mt-1"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Macrociclos existentes */}
+              {macrocycles.length > 0 && (
+                <>
+                  <div className="flex items-center gap-2 text-sm text-text-muted">
+                    <Target className="w-4 h-4" />
+                    <span>O agregá a un macrociclo existente</span>
+                  </div>
+                  
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {macrocycles.map((macro) => (
+                      <div
+                        key={macro.id}
+                        className={cn(
+                          "p-3 rounded-lg border-2 cursor-pointer transition-all",
+                          selectedMacrocycleId === macro.id
+                            ? "border-primary bg-primary/10"
+                            : "border-border hover:border-primary/50"
+                        )}
+                        onClick={() => setSelectedMacrocycleId(macro.id)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <Target className={cn(
+                              "w-5 h-5",
+                              selectedMacrocycleId === macro.id ? "text-primary" : "text-text-muted"
+                            )} />
+                            <div>
+                              <p className="font-medium">{macro.name}</p>
+                              <p className="text-xs text-text-muted">
+                                {macro.mesocycles?.length || 0} mesociclos
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {!macro.endDate && (
+                              <Badge className="bg-primary/20 text-primary text-[10px]">
+                                Activo
+                              </Badge>
+                            )}
+                            {selectedMacrocycleId === macro.id && (
+                              <Check className="w-5 h-5 text-primary" />
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          <SheetFooter className="border-t border-border pt-4">
+            <Button
+              onClick={handleActivateWithMacrocycle}
+              disabled={!selectedMacrocycleId || activating}
+              className="w-full h-12 bg-primary text-black"
+            >
+              {activating ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Activando...
+                </>
+              ) : (
+                <>
+                  <Play className="w-4 h-4 mr-2" />
+                  Activar Rutina
+                </>
+              )}
+            </Button>
+          </SheetFooter>
         </SheetContent>
       </Sheet>
     </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -70,6 +70,9 @@ const objetivos = [
 // ==================== COMPONENT ====================
 export default function CreateRoutineV2Page() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const assignToStudentId = searchParams.get("assignTo");
+  
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
@@ -183,47 +186,72 @@ export default function CreateRoutineV2Page() {
   const canGoToStep2 = templateName.trim().length > 0;
   const canCreate = daysPerMicrocycle >= 1;
 
-  // Create template
+  // Create template - usando batch insert (una sola llamada al backend)
   const handleCreate = async () => {
     setSaving(true);
     
     try {
-      // 1. Crear la plantilla
-      const template = await routineV2Api.createTemplate({
-        name: templateName,
-        description: templateDescription || undefined,
-        objective: templateObjective || undefined,
-        estimatedWeeks: microcyclesCount,
-        targetDaysPerWeek: daysPerMicrocycle,
-        tags: templateTags.length > 0 ? templateTags : undefined,
-      });
-
-      // 2. Crear todos los microciclos con sus días
+      // Construir la estructura completa para batch insert
+      const microcycles = [];
       for (let weekNum = 1; weekNum <= microcyclesCount; weekNum++) {
-        const micro = await routineV2Api.addMicrocycle(template.id, {
-          name: `Semana ${weekNum}`,
-          weekNumber: weekNum,
-          isDeload: false,
-        });
-
-        // 3. Crear los días del microciclo
+        const days = [];
         for (let i = 0; i < daysPerMicrocycle; i++) {
-          await routineV2Api.addDay(micro.id, {
+          days.push({
             name: dayNames[i] || `Día ${i + 1}`,
             isRestDay: false,
           });
         }
+        microcycles.push({
+          name: `Semana ${weekNum}`,
+          weekNumber: weekNum,
+          isDeload: false,
+          days,
+        });
       }
+
+      // Crear todo en una sola llamada (batch insert)
+      const template = await routineV2Api.createTemplateComplete({
+        name: templateName,
+        description: templateDescription || undefined,
+        objective: templateObjective || undefined,
+        tags: templateTags.length > 0 ? templateTags : undefined,
+        microcycles,
+        autoPublish: !!assignToStudentId, // Publicar automáticamente si se va a asignar
+      });
 
       // Limpiar draft
       localStorage.removeItem(DRAFT_KEY);
       
-      toast.success("¡Plantilla creada!", {
-        description: "Ahora podés agregar los ejercicios",
-      });
-      
-      // Ir al editor
-      router.push(`/coach/routines-v2/${template.id}/edit`);
+      // Si hay un alumno para asignar
+      if (assignToStudentId) {
+        try {
+          const assigned = await routineV2Api.assignTemplate({
+            templateId: template.id,
+            studentId: parseInt(assignToStudentId),
+            autoCreateMicrocycles: true,
+          });
+          
+          toast.success("¡Rutina creada y asignada!", {
+            description: "Ahora podés agregar los ejercicios",
+          });
+          
+          // Ir al editor de la rutina del alumno
+          router.push(`/coach/student-routine-v2/${assigned.id}/edit`);
+        } catch (assignError) {
+          console.error("Error assigning template:", assignError);
+          toast.error("Error al asignar la rutina", {
+            description: "La plantilla se creó pero no se pudo asignar",
+          });
+          router.push(`/coach/routines-v2/${template.id}/edit`);
+        }
+      } else {
+        toast.success("¡Plantilla creada!", {
+          description: "Ahora podés agregar los ejercicios",
+        });
+        
+        // Ir al editor de la plantilla
+        router.push(`/coach/routines-v2/${template.id}/edit`);
+      }
     } catch (error) {
       console.error("Error creating template:", error);
       toast.error("Error al crear la plantilla", {
@@ -239,9 +267,9 @@ export default function CreateRoutineV2Page() {
   return (
     <div className="min-h-screen bg-background pb-24">
       <PageHeader
-        title="Nueva Plantilla"
+        title={assignToStudentId ? "Nueva Rutina" : "Nueva Plantilla"}
         subtitle={`Paso ${step} de ${totalSteps}`}
-        backHref="/coach/routines-v2"
+        backHref={assignToStudentId ? `/coach/students/${assignToStudentId}/routine` : "/coach/routines-v2"}
       />
 
       {/* Progress bar */}

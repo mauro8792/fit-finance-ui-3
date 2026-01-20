@@ -8,19 +8,32 @@ export const getAllStudents = async (): Promise<Student[]> => {
   return data;
 };
 
+export const getStudentById = async (studentId: number): Promise<Student> => {
+  const { data } = await api.get(`/students/${studentId}`);
+  return data;
+};
+
 export const createStudent = async (studentData: {
   email: string;
   password: string;
   firstName: string;
   lastName: string;
-  coachId?: number;
+  coachId: number;
+  phone?: string;
+  birthDate?: string;
 }) => {
-  const { data } = await api.post("/students", studentData);
+  const { data } = await api.post("/students/admin", studentData);
   return data;
 };
 
-export const updateStudent = async (studentId: number, updates: Partial<Student>) => {
-  const { data } = await api.put(`/students/${studentId}`, updates);
+export const updateStudent = async (studentId: number, updates: {
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  coachId?: number;
+  isActive?: boolean;
+}) => {
+  const { data } = await api.patch(`/students/${studentId}`, updates);
   return data;
 };
 
@@ -42,7 +55,12 @@ export const createCoach = async (coachData: {
   firstName: string;
   lastName: string;
 }) => {
-  const { data } = await api.post("/coaches", coachData);
+  // Usar el endpoint /coaches/complete que crea usuario + coach
+  const { data } = await api.post("/coaches/complete", {
+    email: coachData.email,
+    password: coachData.password,
+    fullName: `${coachData.firstName} ${coachData.lastName}`,
+  });
   return data;
 };
 

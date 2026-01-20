@@ -133,7 +133,12 @@ export const useAuthStore = create<AuthState & AuthActions>()(
       },
 
       logout: () => {
-        localStorage.removeItem("token");
+        // Limpiar todo el localStorage (tokens, stores persistidos, cachés)
+        localStorage.clear();
+        // Limpiar sessionStorage también
+        sessionStorage.clear();
+        
+        // Resetear estado
         set({
           status: "not-authenticated",
           user: null,
@@ -143,6 +148,9 @@ export const useAuthStore = create<AuthState & AuthActions>()(
           token: null,
           error: null,
         });
+
+        // Forzar recarga para limpiar estados en memoria de otros stores
+        window.location.href = "/auth/login";
       },
 
       checkAuth: async () => {

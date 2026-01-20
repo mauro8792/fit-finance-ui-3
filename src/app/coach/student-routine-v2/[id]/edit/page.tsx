@@ -365,36 +365,37 @@ export default function EditStudentRoutinePage() {
     setShowSeriesForm(true);
   };
 
-  // Add exercise with sets
+  // Add exercise with sets (batch insert)
   const handleAddExercise = async () => {
     if (!selectedCatalogExercise || !currentDay) return;
 
     setSaving(true);
     try {
-      // 1. Create exercise
-      const newExercise = await routineV2Api.addStudentExercise(currentDay.id, {
-        exerciseCatalogId: selectedCatalogExercise.id,
-        defaultReps: repsRange,
-        defaultRestSeconds: rest ? parseInt(rest) * 60 : 120,
-        defaultRir: rir ? parseInt(rir) : undefined,
-        defaultRpe: rpe ? parseInt(rpe) : undefined,
-        notes: notes || undefined,
-      });
-
-      // 2. Create sets
       const count = parseInt(seriesCount) || 3;
+      
+      // Build sets array
+      const sets = [];
       for (let i = 0; i < count; i++) {
         const isLast = i === count - 1;
-        await routineV2Api.addStudentSet(newExercise.id, {
+        sets.push({
           targetReps: (isLast && includeAmrap) ? "AMRAP" : repsRange,
           targetLoad: kg ? parseFloat(kg) : undefined,
-          targetRir: rir || undefined,
+          targetRir: rir ? parseInt(rir) : undefined,
           targetRpe: rpe ? parseInt(rpe) : undefined,
-          isAmrap: isLast && includeAmrap,
           isDropSet: isLast && includeDropSet,
-          dropSetCount: (isLast && includeDropSet) ? parseInt(dropSetCount) : undefined,
         });
       }
+
+      // Single API call - batch insert exercise + sets
+      await routineV2Api.addStudentExerciseWithSets(currentDay.id, {
+        exerciseCatalogId: selectedCatalogExercise.id,
+        targetReps: repsRange,
+        restSeconds: rest ? parseInt(rest) * 60 : 120,
+        targetRir: rir ? parseInt(rir) : undefined,
+        targetRpe: rpe ? parseInt(rpe) : undefined,
+        coachNotes: notes || undefined,
+        sets,
+      });
 
       await refetch();
       setShowSeriesForm(false);

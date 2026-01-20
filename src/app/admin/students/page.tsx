@@ -173,7 +173,7 @@ export default function AdminStudentsPage() {
               >
                 <Card
                   className="bg-surface/80 border-border cursor-pointer touch-feedback"
-                  onClick={() => router.push(`/admin/students/${student.id}`)}
+                  onClick={() => router.push(`/admin/students/${student.id}/edit`)}
                 >
                   <CardContent className="p-4">
                     <div className="flex items-center gap-3">

@@ -68,6 +68,11 @@ export default function StudentRoutinePage() {
   const [newMacrocycleName, setNewMacrocycleName] = useState("");
   const [activating, setActivating] = useState(false);
   
+  // Estado para modal de vincular a macrociclo
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [routineToLink, setRoutineToLink] = useState<StudentMesocycle | null>(null);
+  const [linking, setLinking] = useState(false);
+  
   // Ref para evitar llamadas duplicadas (StrictMode)
   const dataFetched = useRef(false);
 
@@ -117,6 +122,57 @@ export default function StudentRoutinePage() {
       setRoutinesV2(routinesV2Data || []);
     } catch (error) {
       console.error("Error refreshing data:", error);
+    }
+  };
+
+  // Función para abrir modal de vincular
+  const openLinkModal = (routine: StudentMesocycle) => {
+    setRoutineToLink(routine);
+    setSelectedMacrocycleId(null);
+    setNewMacrocycleName("");
+    setShowLinkModal(true);
+  };
+
+  // Función para vincular a macrociclo
+  const handleLinkToMacrocycle = async () => {
+    if (!routineToLink || !selectedMacrocycleId) {
+      toast.error("Seleccioná un macrociclo");
+      return;
+    }
+
+    setLinking(true);
+    try {
+      let macrocycleId: number;
+      
+      if (selectedMacrocycleId === "new") {
+        // Crear nuevo macrociclo
+        const newMacro = await api.post("/macrocycle", {
+          name: newMacrocycleName || routineToLink.name,
+          studentId: studentId,
+          startDate: new Date().toISOString().split('T')[0],
+        });
+        macrocycleId = newMacro.data.id;
+      } else {
+        macrocycleId = selectedMacrocycleId;
+      }
+
+      // Vincular rutina al macrociclo
+      await routineV2Api.updateStudentRoutine(routineToLink.id, { macrocycleId });
+
+      toast.success("¡Rutina vinculada!", {
+        description: selectedMacrocycleId === "new" 
+          ? `Se creó el macrociclo "${newMacrocycleName || routineToLink.name}"`
+          : "Rutina vinculada al macrociclo"
+      });
+      
+      setShowLinkModal(false);
+      dataFetched.current = false;
+      refreshData();
+    } catch (error) {
+      console.error("Error linking:", error);
+      toast.error("Error al vincular");
+    } finally {
+      setLinking(false);
     }
   };
 
@@ -191,7 +247,7 @@ export default function StudentRoutinePage() {
               <div className="flex flex-col gap-2">
                 <Button
                   className="bg-gradient-to-r from-primary to-primary-hover text-black"
-                  onClick={() => router.push(`/coach/routines/create?studentId=${studentId}`)}
+                  onClick={() => router.push(`/coach/routines-v2/create?assignTo=${studentId}`)}
                 >
                   <Plus className="w-4 h-4 mr-2" />
                   Crear Rutina Nueva
@@ -213,10 +269,10 @@ export default function StudentRoutinePage() {
               <Button
                 size="sm"
                 className="bg-primary text-black"
-                onClick={() => router.push(`/coach/routines/create?studentId=${studentId}`)}
+                onClick={() => router.push(`/coach/routines-v2/create?assignTo=${studentId}`)}
               >
                 <Plus className="w-4 h-4 mr-1" />
-                Nuevo Macrociclo
+                Nueva Rutina
               </Button>
               <Button
                 size="sm"
@@ -320,6 +376,18 @@ export default function StudentRoutinePage() {
                             >
                               <Pause className="w-4 h-4 mr-2" />
                               Pausar
+                            </Button>
+                          )}
+                          {/* Botón Vincular - solo para rutinas activas sin macrociclo */}
+                          {isActive && !routine.macrocycleId && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="flex-1 border-accent/50 text-accent hover:bg-accent/10"
+                              onClick={() => openLinkModal(routine)}
+                            >
+                              <FolderPlus className="w-4 h-4 mr-2" />
+                              Vincular
                             </Button>
                           )}
                           {/* Botón Editar */}
@@ -873,6 +941,140 @@ export default function StudentRoutinePage() {
                 <>
                   <Play className="w-4 h-4 mr-2" />
                   Activar Rutina
+                </>
+              )}
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+
+      {/* Sheet para vincular a macrociclo */}
+      <Sheet open={showLinkModal} onOpenChange={setShowLinkModal}>
+        <SheetContent side="bottom" className="h-auto max-h-[80vh] bg-background rounded-t-2xl">
+          <SheetHeader className="pb-4">
+            <SheetTitle className="flex items-center gap-2">
+              <FolderPlus className="w-5 h-5 text-accent" />
+              Vincular a Macrociclo
+            </SheetTitle>
+            <SheetDescription>
+              Seleccioná a qué macrociclo vincular esta rutina
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="space-y-4 pb-4">
+            {/* Opción: Crear nuevo macrociclo */}
+            <div
+              className={cn(
+                "p-4 rounded-lg border-2 cursor-pointer transition-all",
+                selectedMacrocycleId === "new"
+                  ? "border-accent bg-accent/10"
+                  : "border-border hover:border-accent/50"
+              )}
+              onClick={() => setSelectedMacrocycleId("new")}
+            >
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  "w-10 h-10 rounded-lg flex items-center justify-center",
+                  selectedMacrocycleId === "new" ? "bg-accent/20" : "bg-surface"
+                )}>
+                  <FolderPlus className={cn(
+                    "w-5 h-5",
+                    selectedMacrocycleId === "new" ? "text-accent" : "text-text-muted"
+                  )} />
+                </div>
+                <div className="flex-1">
+                  <p className="font-medium">Crear nuevo macrociclo</p>
+                  <p className="text-xs text-text-muted">
+                    Se creará un nuevo macrociclo para esta rutina
+                  </p>
+                </div>
+                {selectedMacrocycleId === "new" && (
+                  <Check className="w-5 h-5 text-accent" />
+                )}
+              </div>
+              
+              {selectedMacrocycleId === "new" && (
+                <div className="mt-3 pt-3 border-t border-border">
+                  <Label htmlFor="linkNewMacroName" className="text-sm">
+                    Nombre del macrociclo
+                  </Label>
+                  <Input
+                    id="linkNewMacroName"
+                    value={newMacrocycleName}
+                    onChange={(e) => setNewMacrocycleName(e.target.value)}
+                    placeholder="Ej: Bloque de Hipertrofia 2026"
+                    className="mt-1"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Macrociclos existentes */}
+            {macrocycles.length > 0 && (
+              <>
+                <div className="flex items-center gap-2 text-sm text-text-muted">
+                  <Target className="w-4 h-4" />
+                  <span>O vinculá a un macrociclo existente</span>
+                </div>
+                
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {macrocycles.map((macro) => (
+                    <div
+                      key={macro.id}
+                      className={cn(
+                        "p-3 rounded-lg border-2 cursor-pointer transition-all",
+                        selectedMacrocycleId === macro.id
+                          ? "border-accent bg-accent/10"
+                          : "border-border hover:border-accent/50"
+                      )}
+                      onClick={() => setSelectedMacrocycleId(macro.id)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Target className={cn(
+                            "w-5 h-5",
+                            selectedMacrocycleId === macro.id ? "text-accent" : "text-text-muted"
+                          )} />
+                          <div>
+                            <p className="font-medium">{macro.name}</p>
+                            <p className="text-xs text-text-muted">
+                              {macro.mesocycles?.length || 0} mesociclos
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {!macro.endDate && (
+                            <Badge className="bg-accent/20 text-accent text-[10px]">
+                              Activo
+                            </Badge>
+                          )}
+                          {selectedMacrocycleId === macro.id && (
+                            <Check className="w-5 h-5 text-accent" />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          <SheetFooter className="border-t border-border pt-4">
+            <Button
+              onClick={handleLinkToMacrocycle}
+              disabled={!selectedMacrocycleId || linking}
+              className="w-full h-12 bg-accent text-black"
+            >
+              {linking ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Vinculando...
+                </>
+              ) : (
+                <>
+                  <FolderPlus className="w-4 h-4 mr-2" />
+                  Vincular Rutina
                 </>
               )}
             </Button>

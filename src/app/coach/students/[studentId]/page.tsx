@@ -101,6 +101,10 @@ export default function StudentDetailPage() {
   const [changingPlan, setChangingPlan] = useState(false);
   const [coachPlanPrice, setCoachPlanPrice] = useState<number | null>(null);
   const [priceSchedules, setPriceSchedules] = useState<any[]>([]);
+  // Fecha de inicio para primera asignación de plan
+  const [planStartDate, setPlanStartDate] = useState<string>("");
+  const [planStartDateDisplay, setPlanStartDateDisplay] = useState<string>("");
+  const planStartDateRef = useRef<HTMLInputElement>(null);
 
   // Pausar / Reactivar alumno
   const [showPauseDialog, setShowPauseDialog] = useState(false);
@@ -215,6 +219,13 @@ export default function StudentDetailPage() {
       return;
     }
 
+    // Si es primera asignación, requerir fecha de inicio
+    const isFirstAssignment = !student?.sportPlan;
+    if (isFirstAssignment && !planStartDate) {
+      toast.error("Seleccioná la fecha de inicio del alumno");
+      return;
+    }
+
     // Si es el mismo plan, cerrar
     if (student?.sportPlan?.id?.toString() === selectedPlanId) {
       setShowChangePlan(false);
@@ -225,9 +236,12 @@ export default function StudentDetailPage() {
     try {
       const { data } = await api.put(`/students/${studentId}/change-plan`, {
         sportPlanId: parseInt(selectedPlanId),
+        ...(isFirstAssignment && planStartDate ? { startDate: planStartDate } : {}),
       });
       toast.success(data.message || "Plan actualizado");
       setShowChangePlan(false);
+      setPlanStartDate("");
+      setPlanStartDateDisplay("");
       // Recargar datos del alumno
       const updatedStudent = await getStudentById(studentId);
       setStudent(updatedStudent);
@@ -776,6 +790,40 @@ export default function StudentDetailPage() {
                   );
                 })}
               </div>
+
+              {/* Fecha de inicio - solo para primera asignación */}
+              {!student?.sportPlan && (
+                <div className="space-y-2 pt-2 border-t border-border">
+                  <label className="text-sm font-medium text-text flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-primary" />
+                    Fecha de inicio del alumno *
+                  </label>
+                  <p className="text-xs text-text-muted">
+                    Las cuotas se generarán a partir de esta fecha
+                  </p>
+                  <div 
+                    className="relative flex items-center bg-background border border-border rounded-md px-3 py-2 cursor-pointer hover:border-primary transition-colors"
+                    onClick={() => planStartDateRef.current?.showPicker()}
+                  >
+                    <Calendar className="w-4 h-4 text-text-muted mr-2" />
+                    <span className={`flex-1 ${planStartDateDisplay ? "text-text" : "text-text-muted"}`}>
+                      {planStartDateDisplay || "dd/mm/aaaa"}
+                    </span>
+                    <input
+                      ref={planStartDateRef}
+                      type="date"
+                      value={planStartDate}
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          setPlanStartDate(e.target.value);
+                          setPlanStartDateDisplay(formatDateToDisplay(e.target.value));
+                        }
+                      }}
+                      className="absolute inset-0 opacity-0 cursor-pointer"
+                    />
+                  </div>
+                </div>
+              )}
 
               <div className="flex gap-3 pt-2">
                 <Button

@@ -49,6 +49,7 @@ import {
   AreaChart,
 } from "recharts";
 import api from "@/lib/api";
+import { getMyWorkoutHistory, V2WorkoutHistoryItem } from "@/lib/api/routine-v2";
 
 interface TrainingDay {
   id: number;
@@ -150,53 +151,93 @@ export default function TrainingHistoryPage() {
 
         console.log("🔄 Cargando historial desde API...");
 
-        // Obtener macrociclos del estudiante
-        const macros = await getMacrocyclesByStudent(studentId);
-
-        // Para cada macrociclo, obtener mesociclos y microciclos con días entrenados
         const historialCompleto: TrainingDay[] = [];
 
-        for (const macro of macros) {
-          // Get mesocycles for this macro
-          const mesosResponse = await api.get(`/mesocycle/macrocycle/${macro.id}`);
-          const mesos = mesosResponse.data;
+        // ========== CARGAR HISTORIAL V2 ==========
+        try {
+          const v2History = await getMyWorkoutHistory();
+          console.log("📦 Historial V2:", v2History.length, "entrenamientos");
 
-          for (const meso of mesos) {
-            const micros = await getMicrocyclesByMesocycle(meso.id);
+          // Convertir V2 al formato TrainingDay
+          for (const item of v2History) {
+            historialCompleto.push({
+              id: parseInt(item.id.slice(0, 8), 16) || Math.random() * 1000000, // Convertir UUID a número
+              dayNumber: item.dayNumber,
+              dayName: item.dayName,
+              fecha: item.completedAt ? item.completedAt.split('T')[0] : null,
+              esDescanso: false,
+              exercises: item.exercises.map((ex: any) => ({
+                id: parseInt(ex.id?.slice(0, 8) || '0', 16) || Math.random() * 1000000,
+                exerciseCatalog: ex.exerciseCatalog || { id: 0, name: ex.name },
+                sets: (ex.sets || []).map((s: any, i: number) => ({
+                  id: s.id || i,
+                  load: s.load || 0,
+                  reps: typeof s.reps === 'string' ? parseInt(s.reps) || 0 : s.reps || 0,
+                  actualRir: s.actualRir ?? null,
+                  status: 'completed',
+                })),
+              })),
+              macrocycleName: "Rutina V2",
+              mesocycleName: item.mesocycleName,
+              microcycleName: item.microcycleName,
+              totalExercises: item.totalExercises,
+              totalSets: item.totalSets,
+            });
+          }
+        } catch (v2Error) {
+          console.log("⚠️ No se pudo cargar historial V2:", v2Error);
+        }
 
-            for (const micro of micros) {
-              // Filtrar días que tienen fecha (fueron entrenados)
-              const diasEntrenados = (micro.days || [])
-                .filter((day: any) => day.fecha && !day.esDescanso)
-                .map((day: any) => {
-                  const exercises = day.exercises || [];
-                  return {
-                    id: day.id,
-                    dayNumber: day.dia,
-                    dayName: day.nombre || `Día ${day.dia}`,
-                    fecha: day.fecha,
-                    esDescanso: day.esDescanso,
-                    exercises: exercises,
-                    macrocycleName: macro.name,
-                    mesocycleName: meso.name,
-                    microcycleName: micro.name,
-                    totalExercises: exercises.length,
-                    totalSets: exercises.reduce((total: number, ex: any) => {
-                      const sets = ex.sets || [];
-                      return total + sets.length;
-                    }, 0),
-                  };
-                });
+        // ========== CARGAR HISTORIAL V1 ==========
+        try {
+          // Obtener macrociclos del estudiante
+          const macros = await getMacrocyclesByStudent(studentId);
 
-              historialCompleto.push(...diasEntrenados);
+          // Para cada macrociclo, obtener mesociclos y microciclos con días entrenados
+          for (const macro of macros) {
+            // Get mesocycles for this macro
+            const mesosResponse = await api.get(`/mesocycle/macrocycle/${macro.id}`);
+            const mesos = mesosResponse.data;
+
+            for (const meso of mesos) {
+              const micros = await getMicrocyclesByMesocycle(meso.id);
+
+              for (const micro of micros) {
+                // Filtrar días que tienen fecha (fueron entrenados)
+                const diasEntrenados = (micro.days || [])
+                  .filter((day: any) => day.fecha && !day.esDescanso)
+                  .map((day: any) => {
+                    const exercises = day.exercises || [];
+                    return {
+                      id: day.id,
+                      dayNumber: day.dia,
+                      dayName: day.nombre || `Día ${day.dia}`,
+                      fecha: day.fecha,
+                      esDescanso: day.esDescanso,
+                      exercises: exercises,
+                      macrocycleName: macro.name,
+                      mesocycleName: meso.name,
+                      microcycleName: micro.name,
+                      totalExercises: exercises.length,
+                      totalSets: exercises.reduce((total: number, ex: any) => {
+                        const sets = ex.sets || [];
+                        return total + sets.length;
+                      }, 0),
+                    };
+                  });
+
+                historialCompleto.push(...diasEntrenados);
+              }
             }
           }
+        } catch (v1Error) {
+          console.log("⚠️ No se pudo cargar historial V1:", v1Error);
         }
 
         // Ordenar por fecha (más reciente primero)
         historialCompleto.sort((a, b) => {
-          const dateA = new Date(a.fecha + "T12:00:00");
-          const dateB = new Date(b.fecha + "T12:00:00");
+          const dateA = a.fecha ? new Date(a.fecha + "T12:00:00").getTime() : 0;
+          const dateB = b.fecha ? new Date(b.fecha + "T12:00:00").getTime() : 0;
           return dateB.getTime() - dateA.getTime();
         });
 
@@ -262,9 +303,10 @@ export default function TrainingHistoryPage() {
             exerciseMap.set(exerciseName, []);
           }
 
-          const maxLoad = Math.max(...validSets.map((s) => s.load || 0));
-          const avgLoad =
-            validSets.reduce((sum, s) => sum + (s.load || 0), 0) / validSets.length;
+          const maxLoad = validSets.length > 0 ? Math.max(...validSets.map((s) => s.load || 0)) : 0;
+          const avgLoad = validSets.length > 0
+            ? validSets.reduce((sum, s) => sum + (s.load || 0), 0) / validSets.length
+            : 0;
           const maxReps = Math.max(...validSets.map((s) => s.reps || 0));
           const totalVolume = validSets.reduce(
             (sum, s) => sum + (s.load || 0) * (s.reps || 0),
@@ -817,7 +859,7 @@ export default function TrainingHistoryPage() {
                                     {session.maxLoad} kg
                                   </td>
                                   <td className="py-2 px-1.5 text-right text-text-muted text-xs">
-                                    {Math.round(session.avgLoad)} kg
+                                    {isNaN(session.avgLoad) ? "-" : `${Math.round(session.avgLoad)} kg`}
                                   </td>
                                 </tr>
                               );

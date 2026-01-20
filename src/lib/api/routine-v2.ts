@@ -341,3 +341,43 @@ export const completeDay = async (dayId: string): Promise<void> => {
   await api.post(`${STUDENT_BASE_URL}/days/${dayId}/complete`);
 };
 
+// ========== HISTORIAL DE ENTRENAMIENTOS V2 ==========
+
+export interface V2WorkoutHistoryItem {
+  id: string;
+  dayNumber: number;
+  dayName: string;
+  completedAt: string | null;
+  isCompleted: boolean;
+  mesocycleName: string;
+  mesocycleId: string;
+  microcycleName: string;
+  microcycleOrder: number;
+  totalExercises: number;
+  completedSets: number;
+  totalSets: number;
+  exercises: {
+    id: string;
+    name: string;
+    muscleGroup?: string;
+    totalSets: number;
+    completedSets: number;
+  }[];
+}
+
+/**
+ * Obtener historial de entrenamientos V2 del estudiante logueado
+ */
+export const getMyWorkoutHistory = async (): Promise<V2WorkoutHistoryItem[]> => {
+  const { data } = await api.get(`${MY_ROUTINE_URL}/history`);
+  return data;
+};
+
+/**
+ * Obtener historial de entrenamientos V2 de un alumno (para coach)
+ */
+export const getStudentWorkoutHistory = async (studentId: number): Promise<V2WorkoutHistoryItem[]> => {
+  const { data } = await api.get(`${STUDENT_BASE_URL}/student/${studentId}/history`);
+  return data;
+};
+

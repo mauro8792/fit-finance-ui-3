@@ -147,15 +147,173 @@ export default function StudentDashboard() {
   
   // Compute active micro info from store
   const currentMicro = getCurrentMicro();
+  // También obtener el micro anterior si existe (para mostrar último entreno)
+  const previousMicro = activeMeso?.microcycles?.[selectedMicroIndex - 1] || null;
+  
   const activeMicro = currentMicro && activeMeso && macrocycle ? (() => {
     let totalSets = 0;
     let completedSets = 0;
-    currentMicro.days?.forEach((day) => {
+    let nextWorkout: string | null = null;
+    let lastWorkout: string | null = null;
+    
+    // Fecha de hoy (solo fecha, sin hora)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Ordenar días por orden si existe
+    const sortedDays = [...(currentMicro.days || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
+    
+    // Primero calculamos el estado de cada día
+    const daysStatus = sortedDays.map((day, index) => {
+      let dayTotalSets = 0;
+      let dayCompletedSets = 0;
+      let lastSetDate: Date | null = null;
+      
       day.exercises?.forEach((ex) => {
+        ex.sets?.forEach((s) => {
+          dayTotalSets++;
+          if (s.status === "completed") {
+            dayCompletedSets++;
+            // Buscar la fecha más reciente de set completado
+            if (s.updatedAt) {
+              const setDate = new Date(s.updatedAt);
+              if (!lastSetDate || setDate > lastSetDate) {
+                lastSetDate = setDate;
+              }
+            }
+          }
+        });
         totalSets += ex.sets?.length || 0;
         completedSets += ex.sets?.filter((s) => s.status === "completed").length || 0;
       });
+      
+      const dayNumber = index + 1;
+      const dayName = day.name && day.name !== `Día ${dayNumber}` ? day.name : `Día ${dayNumber}`;
+      
+      // Un día se considera "cerrado" si se trabajó antes de hoy (aunque tenga pendientes)
+      const wasWorkedBeforeToday = lastSetDate && lastSetDate < today;
+      const isClosedIncomplete = wasWorkedBeforeToday && dayCompletedSets < dayTotalSets;
+      
+      return {
+        dayName,
+        dayTotalSets,
+        dayCompletedSets,
+        isCompleted: dayTotalSets > 0 && dayCompletedSets === dayTotalSets,
+        isStarted: dayCompletedSets > 0,
+        hasSets: dayTotalSets > 0,
+        lastSetDate,
+        isClosedIncomplete, // Se trabajó antes de hoy pero quedó incompleto
+      };
     });
+    
+    // Encontrar el último día trabajado (con fecha más reciente o por orden si no hay fechas)
+    let lastWorkedDayIndex = -1;
+    let lastWorkedDate: Date | null = null;
+    
+    daysStatus.forEach((day, index) => {
+      if (day.lastSetDate && (!lastWorkedDate || day.lastSetDate > lastWorkedDate)) {
+        lastWorkedDate = day.lastSetDate;
+        lastWorkedDayIndex = index;
+      }
+    });
+    
+    // Fallback: si no hay fechas pero hay días con sets completados, usar el último en orden
+    if (lastWorkedDayIndex === -1) {
+      for (let i = daysStatus.length - 1; i >= 0; i--) {
+        if (daysStatus[i].isStarted) {
+          lastWorkedDayIndex = i;
+          break;
+        }
+      }
+    }
+    
+    // Último entreno: el día con la fecha más reciente de trabajo
+    let lastWorkoutMicroIndex = selectedMicroIndex;
+    
+    if (lastWorkedDayIndex >= 0) {
+      lastWorkout = daysStatus[lastWorkedDayIndex].dayName;
+    } else {
+      // Si no hay último en el micro actual, buscar en micros anteriores
+      const allMicros = activeMeso.microcycles || [];
+      for (let microIdx = selectedMicroIndex - 1; microIdx >= 0; microIdx--) {
+        const micro = allMicros[microIdx];
+        if (!micro) continue;
+        
+        const prevDays = [...(micro.days || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
+        let found = false;
+        
+        for (let i = prevDays.length - 1; i >= 0; i--) {
+          const day = prevDays[i];
+          const hasCompletedSets = day.exercises?.some(ex => 
+            ex.sets?.some(s => s.status === "completed")
+          );
+          if (hasCompletedSets) {
+            const dayNumber = i + 1;
+            lastWorkout = day.name && day.name !== `Día ${dayNumber}` ? day.name : `Día ${dayNumber}`;
+            lastWorkoutMicroIndex = microIdx;
+            found = true;
+            break;
+          }
+        }
+        
+        if (found) break;
+      }
+      
+      // Fallback final: si seguimos sin encontrar nada pero sabemos que hay progreso
+      if (!lastWorkout && completedSets === 0 && selectedMicroIndex > 0) {
+        // Mostrar referencia genérica al micro anterior
+        lastWorkout = `Micro ${selectedMicroIndex}`; // Micro anterior (sin especificar día)
+        lastWorkoutMicroIndex = selectedMicroIndex - 1;
+      }
+    }
+    
+    // Próximo entreno: depende de si el último día trabajado fue hoy o antes
+    const lastWorkedToday = lastWorkedDate && lastWorkedDate >= today;
+    let nextMicroIndex = selectedMicroIndex; // Por defecto, mismo micro
+    
+    if (lastWorkedToday && lastWorkedDayIndex >= 0) {
+      // Si se trabajó hoy, el próximo es:
+      // - El mismo día si no está completo
+      // - El siguiente día si está completo
+      const currentDay = daysStatus[lastWorkedDayIndex];
+      if (!currentDay.isCompleted) {
+        nextWorkout = currentDay.dayName;
+      } else {
+        // Buscar el siguiente día no completado
+        for (let i = lastWorkedDayIndex + 1; i < daysStatus.length; i++) {
+          if (daysStatus[i].hasSets && !daysStatus[i].isCompleted) {
+            nextWorkout = daysStatus[i].dayName;
+            break;
+          }
+        }
+        // Si no hay más días en este micro, pasar al siguiente
+        if (!nextWorkout) {
+          nextMicroIndex = selectedMicroIndex + 1;
+          nextWorkout = "Día 1"; // Primer día del siguiente micro
+        }
+      }
+    } else {
+      // Si se trabajó antes de hoy (o nunca), el próximo es el siguiente día en orden
+      const nextDayIndex = lastWorkedDayIndex >= 0 ? lastWorkedDayIndex + 1 : 0;
+      
+      // Buscar desde el siguiente día
+      for (let i = nextDayIndex; i < daysStatus.length; i++) {
+        if (daysStatus[i].hasSets) {
+          nextWorkout = daysStatus[i].dayName;
+          break;
+        }
+      }
+      
+      // Si llegamos al final del micro, pasar al siguiente
+      if (!nextWorkout) {
+        nextMicroIndex = selectedMicroIndex + 1;
+        nextWorkout = "Día 1"; // Primer día del siguiente micro
+      }
+    }
+    
+    // Verificar si el siguiente micro existe
+    const totalMicros = activeMeso.microcycles?.length || 0;
+    const nextMicroExists = nextMicroIndex < totalMicros;
     
     return {
       micro: currentMicro,
@@ -164,6 +322,11 @@ export default function StudentDashboard() {
       macroName: macrocycle.name,
       totalSets,
       completedSets,
+      nextWorkout: nextMicroExists || nextMicroIndex === selectedMicroIndex ? nextWorkout : null,
+      lastWorkout,
+      lastWorkoutMicroIndex,
+      nextMicroIndex: nextMicroExists ? nextMicroIndex : selectedMicroIndex,
+      isNextMicroDifferent: nextMicroIndex !== selectedMicroIndex && nextMicroExists,
     };
   })() : null;
 
@@ -180,9 +343,9 @@ export default function StudentDashboard() {
   const pendingFees = (fees || []).filter((f) => f.status !== "paid" && (f.isOverdue || f.isCurrent));
   const hasPendingFees = pendingFees.length > 0;
 
-  // Calculate steps progress
-  const stepsProgress = summary?.steps
-    ? Math.min((summary.steps.weekAverage / summary.steps.dailyGoal) * 100, 100)
+  // Calculate steps progress (del día actual)
+  const stepsProgress = summary?.steps?.todayPercent
+    ? Math.min(summary.steps.todayPercent, 100)
     : 0;
 
   // Current weight - prefer summary, fallback to last recorded weight
@@ -263,7 +426,8 @@ export default function StudentDashboard() {
           {/* Steps Card */}
           <motion.div>
             <Card
-              className="bg-surface/80 border-border cursor-pointer touch-feedback h-full"
+              className="bg-surface/80 cursor-pointer touch-feedback h-full"
+              style={{ border: '2px solid #4cceac' }}
               onClick={() => router.push("/student/progress?tab=steps")}
             >
               <CardContent className="p-4">
@@ -280,15 +444,15 @@ export default function StudentDashboard() {
                         <Footprints className="w-5 h-5 text-accent" />
                       </div>
                       <Badge variant="secondary" className="bg-accent/10 text-accent text-xs">
-                        {typeof summary?.steps?.compliancePercent === 'number' ? summary.steps.compliancePercent.toFixed(0) : 0}%
+                        {typeof summary?.steps?.todayPercent === 'number' ? summary.steps.todayPercent : 0}%
                       </Badge>
                     </div>
-                    <p className="text-xs text-text-muted mb-1">Pasos promedio</p>
+                    <p className="text-xs text-text-muted mb-1">Promedio pasos semana</p>
                     <p className="text-xl font-bold text-text">
                       {summary?.steps?.weekAverage?.toLocaleString() || 0}
                     </p>
                     <p className="text-xs text-text-muted">
-                      Meta: {summary?.steps?.dailyGoal?.toLocaleString() || 0}
+                      Objetivo: {summary?.steps?.dailyGoal?.toLocaleString() || 0}
                     </p>
                     <Progress value={stepsProgress} className="h-1.5 mt-2" />
                   </>
@@ -300,7 +464,8 @@ export default function StudentDashboard() {
           {/* Weight Card */}
           <motion.div>
             <Card
-              className="bg-surface/80 border-border cursor-pointer touch-feedback h-full"
+              className="bg-surface/80 cursor-pointer touch-feedback h-full"
+              style={{ border: '2px solid #2196f3' }}
               onClick={() => router.push("/student/progress?tab=weight")}
             >
               <CardContent className="p-4">
@@ -328,7 +493,7 @@ export default function StudentDashboard() {
                         </Badge>
                       )}
                     </div>
-                    <p className="text-xs text-text-muted mb-1">Peso actual</p>
+                    <p className="text-xs text-text-muted mb-1">Promedio peso semana</p>
                     <p className="text-xl font-bold text-text">
                       {currentWeight !== null ? currentWeight.toFixed(2) : "--"} kg
                     </p>
@@ -341,7 +506,10 @@ export default function StudentDashboard() {
                         )
                       )}
                       <p className="text-xs text-text-muted">
-                        Esta semana
+                        {weightChange !== 0 
+                          ? `${weightChange > 0 ? "+" : ""}${weightChangeGrams}g vs semana anterior`
+                          : "Esta semana"
+                        }
                       </p>
                     </div>
                   </>
@@ -356,7 +524,7 @@ export default function StudentDashboard() {
           <motion.div>
             <Card
               className="bg-gradient-to-br from-primary/20 to-accent/10 border-primary/40 cursor-pointer touch-feedback overflow-hidden"
-              onClick={() => router.push(`/student/routine?micro=${activeMicro.microIndex}`)}
+              onClick={() => router.push(`/student/routine?micro=${activeMicro.nextMicroIndex}`)}
             >
               <CardContent className="p-4">
                 <div className="flex items-center gap-4">
@@ -365,12 +533,31 @@ export default function StudentDashboard() {
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-bold text-text">Microciclo {activeMicro.microIndex + 1}</h3>
+                      <h3 className="font-bold text-text">Microciclo {activeMicro.nextMicroIndex + 1}</h3>
                       <Badge className="bg-primary/20 text-primary text-xs">
-                        En curso
+                        {activeMicro.isNextMicroDifferent ? "Siguiente" : "En curso"}
                       </Badge>
                     </div>
                     <p className="text-sm text-text-muted">{activeMicro.mesoName}</p>
+                    
+                    {/* Próximo y Último entreno */}
+                    <div className="flex gap-4 mt-2 text-xs">
+                      {activeMicro.nextWorkout && (
+                        <div>
+                          <span className="text-text-muted">Próximo: </span>
+                          <span className="text-primary font-medium">{activeMicro.nextWorkout}</span>
+                        </div>
+                      )}
+                      {activeMicro.lastWorkout && (
+                        <div>
+                          <span className="text-text-muted">Último: </span>
+                          <span className="text-text-secondary">
+                            {activeMicro.lastWorkout}
+                            {activeMicro.lastWorkoutMicroIndex !== activeMicro.nextMicroIndex && ` - M${activeMicro.lastWorkoutMicroIndex + 1}`}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                     
                     {/* Progress bar */}
                     <div className="mt-2">

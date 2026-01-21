@@ -360,13 +360,17 @@ export interface DashboardSummary {
     weekAverage: number;
     weekTotal: number;
     daysWithData: number;
-    compliancePercent: number;
+    today: number; // Pasos de hoy
+    todayPercent: number; // % del objetivo de hoy
   };
   weight: {
-    current: number | null;
+    current: number | null; // Promedio semana actual
+    lastWeight: number | null; // Último peso registrado
     weeklyGoal: number | null;
-    weeklyChange: number | null;
-    previousWeek: number | null;
+    weeklyChange: number | null; // Diferencia en gramos vs semana anterior
+    previousWeekAverage: number | null;
+    daysWithDataCurrentWeek?: number;
+    daysWithDataPreviousWeek?: number;
   };
 }
 

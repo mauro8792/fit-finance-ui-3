@@ -360,8 +360,9 @@ export interface DashboardSummary {
     weekAverage: number;
     weekTotal: number;
     daysWithData: number;
-    today: number; // Pasos de hoy
-    todayPercent: number; // % del objetivo de hoy
+    today?: number; // Pasos de hoy
+    todayPercent?: number; // % del objetivo de hoy
+    compliancePercent?: number; // % del promedio semanal (para compatibilidad)
   };
   weight: {
     current: number | null; // Promedio semana actual

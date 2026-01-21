@@ -160,38 +160,33 @@ export default function StudentDashboard() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
-    // Ordenar días por orden si existe
-    const sortedDays = [...(currentMicro.days || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
+    // Ordenar días por día si existe
+    const sortedDays = [...(currentMicro.days || [])].sort((a, b) => (a.dia || 0) - (b.dia || 0));
     
     // Primero calculamos el estado de cada día
     const daysStatus = sortedDays.map((day, index) => {
-      let dayTotalSets = 0;
-      let dayCompletedSets = 0;
-      let lastSetDate: Date | null = null;
+      // Recolectar todos los sets para calcular stats
+      const allSets = day.exercises?.flatMap(ex => ex.sets || []) || [];
+      const dayTotalSets = allSets.length;
+      const completedSetsList = allSets.filter(s => s.status === "completed");
+      const dayCompletedSets = completedSetsList.length;
       
-      day.exercises?.forEach((ex) => {
-        ex.sets?.forEach((s) => {
-          dayTotalSets++;
-          if (s.status === "completed") {
-            dayCompletedSets++;
-            // Buscar la fecha más reciente de set completado
-            if (s.updatedAt) {
-              const setDate = new Date(s.updatedAt);
-              if (!lastSetDate || setDate > lastSetDate) {
-                lastSetDate = setDate;
-              }
-            }
-          }
-        });
-        totalSets += ex.sets?.length || 0;
-        completedSets += ex.sets?.filter((s) => s.status === "completed").length || 0;
-      });
+      // Encontrar la fecha más reciente de set completado
+      const setDates = completedSetsList
+        .filter(s => s.updatedAt)
+        .map(s => new Date(s.updatedAt!).getTime());
+      const lastSetTimestamp = setDates.length > 0 ? Math.max(...setDates) : null;
+      const lastSetDate = lastSetTimestamp ? new Date(lastSetTimestamp) : null;
+      
+      // Sumar al total global
+      totalSets += dayTotalSets;
+      completedSets += dayCompletedSets;
       
       const dayNumber = index + 1;
-      const dayName = day.name && day.name !== `Día ${dayNumber}` ? day.name : `Día ${dayNumber}`;
+      const dayName = day.nombre && day.nombre !== `Día ${dayNumber}` ? day.nombre : `Día ${dayNumber}`;
       
       // Un día se considera "cerrado" si se trabajó antes de hoy (aunque tenga pendientes)
-      const wasWorkedBeforeToday = lastSetDate && lastSetDate < today;
+      const wasWorkedBeforeToday = lastSetDate !== null && lastSetDate.getTime() < today.getTime();
       const isClosedIncomplete = wasWorkedBeforeToday && dayCompletedSets < dayTotalSets;
       
       return {
@@ -211,7 +206,7 @@ export default function StudentDashboard() {
     let lastWorkedDate: Date | null = null;
     
     daysStatus.forEach((day, index) => {
-      if (day.lastSetDate && (!lastWorkedDate || day.lastSetDate > lastWorkedDate)) {
+      if (day.lastSetDate && (!lastWorkedDate || day.lastSetDate.getTime() > lastWorkedDate.getTime())) {
         lastWorkedDate = day.lastSetDate;
         lastWorkedDayIndex = index;
       }
@@ -239,7 +234,7 @@ export default function StudentDashboard() {
         const micro = allMicros[microIdx];
         if (!micro) continue;
         
-        const prevDays = [...(micro.days || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
+        const prevDays = [...(micro.days || [])].sort((a, b) => (a.dia || 0) - (b.dia || 0));
         let found = false;
         
         for (let i = prevDays.length - 1; i >= 0; i--) {
@@ -249,7 +244,7 @@ export default function StudentDashboard() {
           );
           if (hasCompletedSets) {
             const dayNumber = i + 1;
-            lastWorkout = day.name && day.name !== `Día ${dayNumber}` ? day.name : `Día ${dayNumber}`;
+            lastWorkout = day.nombre && day.nombre !== `Día ${dayNumber}` ? day.nombre : `Día ${dayNumber}`;
             lastWorkoutMicroIndex = microIdx;
             found = true;
             break;
@@ -268,7 +263,7 @@ export default function StudentDashboard() {
     }
     
     // Próximo entreno: depende de si el último día trabajado fue hoy o antes
-    const lastWorkedToday = lastWorkedDate && lastWorkedDate >= today;
+    const lastWorkedToday = lastWorkedDate !== null && lastWorkedDate.getTime() >= today.getTime();
     let nextMicroIndex = selectedMicroIndex; // Por defecto, mismo micro
     
     if (lastWorkedToday && lastWorkedDayIndex >= 0) {
@@ -343,9 +338,9 @@ export default function StudentDashboard() {
   const pendingFees = (fees || []).filter((f) => f.status !== "paid" && (f.isOverdue || f.isCurrent));
   const hasPendingFees = pendingFees.length > 0;
 
-  // Calculate steps progress (del día actual)
-  const stepsProgress = summary?.steps?.todayPercent
-    ? Math.min(summary.steps.todayPercent, 100)
+  // Calculate steps progress (promedio semanal vs objetivo)
+  const stepsProgress = summary?.steps
+    ? Math.min((summary.steps.weekAverage / summary.steps.dailyGoal) * 100, 100)
     : 0;
 
   // Current weight - prefer summary, fallback to last recorded weight
@@ -426,8 +421,7 @@ export default function StudentDashboard() {
           {/* Steps Card */}
           <motion.div>
             <Card
-              className="bg-surface/80 cursor-pointer touch-feedback h-full"
-              style={{ border: '2px solid #4cceac' }}
+              className="bg-surface/80 border-border cursor-pointer touch-feedback h-full"
               onClick={() => router.push("/student/progress?tab=steps")}
             >
               <CardContent className="p-4">
@@ -444,7 +438,7 @@ export default function StudentDashboard() {
                         <Footprints className="w-5 h-5 text-accent" />
                       </div>
                       <Badge variant="secondary" className="bg-accent/10 text-accent text-xs">
-                        {typeof summary?.steps?.todayPercent === 'number' ? summary.steps.todayPercent : 0}%
+                        {summary?.steps ? Math.round((summary.steps.weekAverage / summary.steps.dailyGoal) * 100) : 0}%
                       </Badge>
                     </div>
                     <p className="text-xs text-text-muted mb-1">Promedio pasos semana</p>
@@ -464,8 +458,7 @@ export default function StudentDashboard() {
           {/* Weight Card */}
           <motion.div>
             <Card
-              className="bg-surface/80 cursor-pointer touch-feedback h-full"
-              style={{ border: '2px solid #2196f3' }}
+              className="bg-surface/80 border-border cursor-pointer touch-feedback h-full"
               onClick={() => router.push("/student/progress?tab=weight")}
             >
               <CardContent className="p-4">

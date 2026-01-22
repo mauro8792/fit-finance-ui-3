@@ -97,10 +97,25 @@ export default function FeesPage() {
     loadData();
   }, [student?.id]);
 
-  // Solo mostrar cuotas vencidas (overdue) o la cuota actual (isCurrent), no las futuras
-  const pendingFees = fees.filter(
-    (f) => (f.status !== "paid") && (f.isOverdue || f.isCurrent)
-  );
+  // Mostrar cuotas vencidas, actuales, o la próxima (si estamos a 5 días del fin de mes)
+  const today = new Date();
+  const currentMonth = today.getMonth() + 1;
+  const currentYear = today.getFullYear();
+  const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+  const daysUntilEndOfMonth = daysInMonth - today.getDate();
+  const showNextMonth = daysUntilEndOfMonth <= 5; // Mostrar próxima cuota si faltan 5 días o menos
+  
+  // Calcular el mes siguiente
+  const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1;
+  const nextYear = currentMonth === 12 ? currentYear + 1 : currentYear;
+  
+  const pendingFees = fees.filter((f) => {
+    if (f.status === "paid") return false;
+    if (f.isOverdue || f.isCurrent) return true;
+    // Mostrar la cuota del mes siguiente si estamos a 5 días del fin de mes
+    if (showNextMonth && f.month === nextMonth && f.year === nextYear) return true;
+    return false;
+  });
   const paidFees = fees
     .filter((f) => f.status === "paid")
     .sort((a, b) => {

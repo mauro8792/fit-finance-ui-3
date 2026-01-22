@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { useAuthStore } from "@/stores/auth-store";
-import { getDashboardSummary, getWeightHistory, getStepsWeeklySummary, updateStepsForDate, deleteStepsForDate, updateWeight, deleteWeight } from "@/lib/api/student";
+import { getDashboardSummary, getWeightHistory, getStepsWeeklySummary, getStepsWeeklyStats, getRecentStepsDays, updateStepsForDate, deleteStepsForDate, updateWeight, deleteWeight } from "@/lib/api/student";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -61,8 +61,15 @@ export default function ProgressPage() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [weightHistory, setWeightHistory] = useState<WeightLog[]>([]);
   const [stepsStats, setStepsStats] = useState<any>(null);
+  const [weeklyAverages, setWeeklyAverages] = useState<any>(null);
+  const [weeklyAvgOffset, setWeeklyAvgOffset] = useState(0);
   const [weekOffset, setWeekOffset] = useState(0);
   const [loadingSteps, setLoadingSteps] = useState(false);
+  const [recentDays, setRecentDays] = useState<any>(null); // For daily records section
+  
+  // Cache refs to avoid duplicate calls
+  const dataLoadedRef = useRef(false);
+  const weekCacheRef = useRef<Map<number, any>>(new Map());
   
   // Edit steps state
   const [editingDate, setEditingDate] = useState<string | null>(null);
@@ -76,21 +83,31 @@ export default function ProgressPage() {
   const [editWeightValue, setEditWeightValue] = useState<string>("");
   const [savingWeightEdit, setSavingWeightEdit] = useState(false);
 
-  // Load initial data
+  // Load initial data (with cache to avoid duplicate calls)
   useEffect(() => {
     const loadData = async () => {
-      if (!student?.id) return;
+      if (!student?.id || dataLoadedRef.current) return;
+      dataLoadedRef.current = true;
 
       try {
         setLoading(true);
-        const [summaryData, weightData, stepsData] = await Promise.all([
+        const [summaryData, weightData, stepsData, weeklyData, recentData] = await Promise.all([
           getDashboardSummary(student.id).catch(() => null),
           getWeightHistory(student.id, 100).catch(() => []),
           getStepsWeeklySummary(student.id, 0).catch(() => null),
+          getStepsWeeklyStats(student.id).catch(() => null),
+          getRecentStepsDays(student.id, 5).catch(() => null),
         ]);
         setSummary(summaryData);
         setWeightHistory(weightData);
         setStepsStats(stepsData);
+        setWeeklyAverages(weeklyData);
+        setRecentDays(recentData);
+        
+        // Cache the current week's data
+        if (stepsData) {
+          weekCacheRef.current.set(0, stepsData);
+        }
       } catch (error) {
         console.error("Error loading progress:", error);
       } finally {
@@ -101,21 +118,48 @@ export default function ProgressPage() {
     loadData();
   }, [student?.id]);
 
-  // Load steps for specific week when offset changes
-  const loadStepsForWeek = async (offset: number) => {
+  // Load steps for specific week when offset changes (with cache)
+  const loadStepsForWeek = useCallback(async (offset: number) => {
     if (!student?.id) return;
+    
+    // Check cache first
+    const cached = weekCacheRef.current.get(offset);
+    if (cached) {
+      setStepsStats(cached);
+      setWeekOffset(offset);
+      return;
+    }
     
     setLoadingSteps(true);
     try {
       const stepsData = await getStepsWeeklySummary(student.id, offset);
       setStepsStats(stepsData);
       setWeekOffset(offset);
+      // Cache the result
+      weekCacheRef.current.set(offset, stepsData);
     } catch (error) {
       console.error("Error loading steps:", error);
     } finally {
       setLoadingSteps(false);
     }
-  };
+  }, [student?.id]);
+  
+  // Reload recent days after edit/delete
+  const reloadRecentDays = useCallback(async () => {
+    if (!student?.id) return;
+    try {
+      const recentData = await getRecentStepsDays(student.id, 5);
+      setRecentDays(recentData);
+      // Also invalidate week cache since data changed
+      weekCacheRef.current.clear();
+      // Reload current week view
+      const stepsData = await getStepsWeeklySummary(student.id, weekOffset);
+      setStepsStats(stepsData);
+      weekCacheRef.current.set(weekOffset, stepsData);
+    } catch (error) {
+      console.error("Error reloading recent days:", error);
+    }
+  }, [student?.id, weekOffset]);
 
   const handlePrevWeek = () => {
     if (weekOffset < 8) { // Limit to 8 weeks back
@@ -155,8 +199,8 @@ export default function ProgressPage() {
       toast.success("Pasos actualizados");
       setEditingDate(null);
       setEditValue("");
-      // Reload data
-      loadStepsForWeek(weekOffset);
+      // Reload both recent days and current week
+      reloadRecentDays();
     } catch (error) {
       console.error("Error updating steps:", error);
       toast.error("Error al actualizar");
@@ -173,8 +217,8 @@ export default function ProgressPage() {
     try {
       await deleteStepsForDate(student.id, date);
       toast.success("Pasos eliminados");
-      // Reload data
-      loadStepsForWeek(weekOffset);
+      // Reload both recent days and current week
+      reloadRecentDays();
     } catch (error) {
       console.error("Error deleting steps:", error);
       toast.error("Error al eliminar");
@@ -246,11 +290,34 @@ export default function ProgressPage() {
     }));
 
   // Prepare steps chart data from stepsByDay
-  const stepsChartData = stepsStats?.stepsByDay?.map((d: any) => ({
-    date: d.dayShort || d.day?.substring(0, 3) || "",
-    pasos: d.steps || 0,
-    meta: d.goal || stepsStats?.dailyGoal || 0,
-  })) || [];
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+  const dayNamesShort = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+  
+  const stepsChartData = stepsStats?.stepsByDay?.map((d: any) => {
+    // Determine if this is today
+    const dateStr = d.fullDate || d.date;
+    const isToday = dateStr === todayStr;
+    
+    // Get day short name
+    let dayShort = d.dayShort || d.day?.substring(0, 3) || "";
+    if (d.fullDate) {
+      const dayDate = new Date(d.fullDate + 'T12:00:00');
+      dayShort = dayNamesShort[dayDate.getDay()];
+    }
+    
+    return {
+      date: dayShort,
+      dayShort: dayShort,
+      pasos: d.steps || 0,
+      meta: d.goal || stepsStats?.dailyGoal || 0,
+      minimum: d.minimum || stepsStats?.dailyMinimum || 5000,
+      achieved: d.achieved,
+      achievedMinimum: d.achievedMinimum,
+      isToday,
+      fullDate: dateStr,
+    };
+  }) || [];
 
   // Get current weight from summary or from the latest weight history entry
   const currentWeight = typeof summary?.weight?.current === 'number' 
@@ -551,7 +618,7 @@ export default function ProgressPage() {
                           {summary?.steps?.weekAverage?.toLocaleString() || 0}
                         </p>
                         <p className="text-sm text-text-muted mt-1">
-                          Meta: {summary?.steps?.dailyGoal?.toLocaleString() || 0} pasos/día
+                          Objetivo: {summary?.steps?.dailyGoal?.toLocaleString() || 0} pasos/día
                         </p>
                       </div>
                       <div className="w-14 h-14 rounded-full bg-accent/20 flex items-center justify-center">
@@ -570,7 +637,183 @@ export default function ProgressPage() {
                   </CardContent>
                 </Card>
 
-                {/* Steps Chart with Week Navigation */}
+                {/* Weekly Averages Historical Chart */}
+                <Card className="bg-surface/80 border-border">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-base text-text-secondary flex items-center gap-2">
+                        <Target className="w-4 h-4" />
+                        Promedios semanales
+                      </CardTitle>
+                      {weeklyAverages?.weeks?.length > 7 && (
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => setWeeklyAvgOffset(prev => Math.min(prev + 7, (weeklyAverages?.weeks?.length || 7) - 7))}
+                            disabled={weeklyAvgOffset >= (weeklyAverages?.weeks?.length || 7) - 7}
+                          >
+                            <ChevronLeft className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => setWeeklyAvgOffset(prev => Math.max(prev - 7, 0))}
+                            disabled={weeklyAvgOffset <= 0}
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-4 pt-0">
+                    {weeklyAverages?.hasData && weeklyAverages?.weeks?.length > 0 ? (
+                      <>
+                        {/* Bar Chart with values on top - Weekly Averages */}
+                        {(() => {
+                          const goal = weeklyAverages?.dailyGoal || 8000;
+                          // Get last 7 weeks based on offset
+                          const allWeeks = weeklyAverages?.weeks || [];
+                          const startIdx = Math.max(0, allWeeks.length - 7 - weeklyAvgOffset);
+                          const endIdx = allWeeks.length - weeklyAvgOffset;
+                          const visibleWeeks = allWeeks.slice(startIdx, endIdx);
+                          
+                          const maxAvg = Math.max(...visibleWeeks.map((w: any) => w.averageSteps), goal);
+                          const yAxisMax = Math.ceil(maxAvg / 2000) * 2000;
+                          
+                          // Check if current week is in visible range
+                          const currentWeekIdx = allWeeks.length - 1;
+                          
+                          // Format steps number (abbreviate if > 999)
+                          const formatSteps = (n: number) => {
+                            if (n >= 10000) return `${(n/1000).toFixed(0)}k`;
+                            if (n >= 1000) return `${(n/1000).toFixed(1)}k`;
+                            return n.toString();
+                          };
+                          
+                          const CHART_HEIGHT = 140; // Fixed height in pixels for the bar area
+                          
+                          return (
+                            <div className="mb-3">
+                              {/* Chart area - only goal value on Y-axis */}
+                              <div className="flex gap-4">
+                                {/* Y-axis - only goal value */}
+                                <div className="relative w-11 text-right pr-3" style={{ height: CHART_HEIGHT }}>
+                                  <span 
+                                    className="absolute text-[9px] text-accent font-medium transform -translate-y-1/2"
+                                    style={{ bottom: `${(goal / yAxisMax) * 100}%` }}
+                                  >
+                                    {(goal/1000).toFixed(0)}k
+                                  </span>
+                                </div>
+                                
+                                {/* Bars area */}
+                                <div className="flex-1 flex items-end justify-between gap-2 relative" style={{ height: CHART_HEIGHT }}>
+                                  {/* Goal reference line */}
+                                  <div 
+                                    className="absolute left-0 right-0 border-t-2 border-dashed border-accent/60 z-10"
+                                    style={{ bottom: `${(goal / yAxisMax) * 100}%` }}
+                                  />
+                                  
+                                  {visibleWeeks.map((week: any, index: number) => {
+                                    const heightPercent = yAxisMax > 0 ? (week.averageSteps / yAxisMax) * 100 : 0;
+                                    const reachedGoal = week.averageSteps >= goal;
+                                    const isCurrentWeek = startIdx + index === currentWeekIdx;
+                                    
+                                    return (
+                                      <div 
+                                        key={index} 
+                                        className={cn(
+                                          "flex-1 flex flex-col items-center justify-end rounded-lg transition-colors h-full",
+                                          isCurrentWeek && "bg-primary/15"
+                                        )}
+                                      >
+                                        {/* Value on top of bar */}
+                                        {week.averageSteps > 0 && (
+                                          <div className="flex flex-col items-center mb-1">
+                                            {reachedGoal && <img src="/icons/Imagen12.png" alt="goal" className="w-4 h-4" />}
+                                            <span className={cn(
+                                              "text-[9px] font-medium",
+                                              reachedGoal ? "text-accent" : "text-text-muted"
+                                            )}>
+                                              {formatSteps(week.averageSteps)}
+                                            </span>
+                                          </div>
+                                        )}
+                                        
+                                        {/* Bar */}
+                                        <div 
+                                          className={cn(
+                                            "w-full max-w-[36px] rounded-t-md transition-all",
+                                            reachedGoal ? "bg-accent" : "bg-accent/50"
+                                          )}
+                                          style={{ 
+                                            height: `${Math.max(heightPercent, week.averageSteps > 0 ? 3 : 0)}%`,
+                                            minHeight: week.averageSteps > 0 ? '4px' : '0px'
+                                          }}
+                                        />
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                              
+                              {/* X-axis labels */}
+                              <div className="flex gap-4 mt-1">
+                                <div className="w-11" /> {/* Spacer for Y-axis */}
+                                <div className="flex-1 flex justify-between gap-2">
+                                  {visibleWeeks.map((week: any, index: number) => {
+                                    const isCurrentWeek = startIdx + index === currentWeekIdx;
+                                    const weekDate = new Date(week.weekStart + 'T12:00:00');
+                                    const dayNum = weekDate.getDate();
+                                    const monthShort = weekDate.toLocaleDateString('es', { month: 'short' }).slice(0, 3);
+                                    
+                                    return (
+                                      <span 
+                                        key={index}
+                                        className={cn(
+                                          "flex-1 text-[9px] leading-tight text-center",
+                                          isCurrentWeek ? "text-primary font-bold" : "text-text-muted"
+                                        )}
+                                      >
+                                        {dayNum}/{monthShort}
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {/* Stats Row */}
+                        <div className="grid grid-cols-2 gap-4 pt-3 border-t border-border">
+                          <div className="text-center">
+                            <p className="text-xl font-bold text-text">
+                              {(weeklyAverages?.weeks?.[weeklyAverages.weeks.length - 1]?.averageSteps || 0).toLocaleString()}
+                            </p>
+                            <p className="text-xs text-text-muted">Promedio esta semana</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-xl font-bold text-text">
+                              {(weeklyAverages?.weeks?.[weeklyAverages.weeks.length - 1]?.totalSteps || 0).toLocaleString()}
+                            </p>
+                            <p className="text-xs text-text-muted">Total esta semana</p>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="h-36 flex items-center justify-center text-text-muted">
+                        No hay datos históricos de pasos
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Steps Chart with Week Navigation - Unified Style */}
                 <Card className="bg-surface/80 border-border">
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
@@ -605,131 +848,165 @@ export default function ProgressPage() {
                       </p>
                     )}
                   </CardHeader>
-                  <CardContent className="p-2">
-                    <div 
-                      className="h-48 w-full relative outline-none focus:outline-none [&_svg]:outline-none [&_*]:outline-none"
-                      style={{ WebkitTapHighlightColor: 'transparent' }}
-                      onMouseEnter={() => setIsStepsChartHovered(true)}
-                      onMouseLeave={() => {
-                        setIsStepsChartHovered(false);
-                        setActiveBarIndex(undefined);
-                      }}
-                      onTouchStart={() => setIsStepsChartHovered(true)}
-                      onTouchEnd={() => {
-                        // Delay para permitir que se muestre el tooltip antes de ocultarlo
-                        setTimeout(() => {
-                          setIsStepsChartHovered(false);
-                          setActiveBarIndex(undefined);
-                        }, 2000);
-                      }}
-                    >
-                      {loadingSteps && (
-                        <div className="absolute inset-0 bg-background/50 flex items-center justify-center z-10">
-                          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                        </div>
-                      )}
-                      {stepsChartData.length > 0 ? (
-                        <ResponsiveContainer width="100%" height={192} debounce={50}>
-                          <BarChart 
-                            data={stepsChartData} 
-                            barCategoryGap="20%"
-                            style={{ outline: 'none' }}
-                            onMouseMove={(state) => {
-                              if (state && typeof state.activeTooltipIndex === 'number') {
-                                setActiveBarIndex(state.activeTooltipIndex);
-                              }
-                            }}
-                            onMouseLeave={() => setActiveBarIndex(undefined)}
-                          >
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" vertical={false} horizontal={true} />
-                            <XAxis
-                              dataKey="date"
-                              tick={{ fontSize: 10, fill: "#94a3b8" }}
-                              tickLine={false}
-                              axisLine={false}
-                            />
-                            <YAxis
-                              tick={{ fontSize: 10, fill: "#94a3b8" }}
-                              tickLine={false}
-                              axisLine={false}
-                              width={40}
-                            />
-                            <Tooltip
-                              active={isStepsChartHovered && activeBarIndex !== undefined}
-                              content={({ payload, label }) => {
-                                // Solo mostrar si el usuario está realmente haciendo hover
-                                if (!isStepsChartHovered || activeBarIndex === undefined || !payload || payload.length === 0) return null;
-                                const value = payload[0]?.value;
-                                return (
-                                  <div className="bg-[#1a1a2e] border border-white/10 rounded-lg px-3 py-2 shadow-lg">
-                                    <p className="text-text-muted text-xs">{label}</p>
-                                    <p className="text-accent font-medium">
-                                      pasos: {typeof value === 'number' ? value.toLocaleString() : value}
-                                    </p>
-                                  </div>
-                                );
-                              }}
-                              cursor={false}
-                            />
-                            <ReferenceLine
-                              y={stepsStats?.dailyGoal || summary?.steps?.dailyGoal || 0}
-                              stroke="#4cceac"
-                              strokeDasharray="5 5"
-                              label={{
-                                value: "Meta",
-                                fill: "#4cceac",
-                                fontSize: 10,
-                                position: "right",
-                              }}
-                            />
-                            <Bar
-                              dataKey="pasos"
-                              radius={[4, 4, 0, 0]}
-                            >
-                              {stepsChartData.map((entry: any, index: number) => {
-                                const goal = stepsStats?.dailyGoal || summary?.steps?.dailyGoal || 8000;
-                                const reachedGoal = entry.pasos >= goal;
-                                return (
-                                  <Cell 
-                                    key={`cell-${index}`} 
-                                    fill={reachedGoal ? "#4cceac" : "#4cceac80"}
+                  <CardContent className="p-4 pt-0">
+                    {loadingSteps && (
+                      <div className="flex items-center justify-center py-12">
+                        <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    )}
+                    {!loadingSteps && stepsChartData.length > 0 && (
+                      <>
+                        {/* Bar Chart with values on top */}
+                        {(() => {
+                          const goal = stepsStats?.dailyGoal || summary?.steps?.dailyGoal || 8000;
+                          const minimum = stepsStats?.dailyMinimum || 5000;
+                          const maxSteps = Math.max(...stepsChartData.map((d: any) => d.pasos), goal);
+                          const yAxisMax = Math.ceil(maxSteps / 2000) * 2000;
+                          
+                          // Format steps number (abbreviate if > 999)
+                          const formatSteps = (n: number) => {
+                            if (n >= 10000) return `${(n/1000).toFixed(0)}k`;
+                            if (n >= 1000) return `${(n/1000).toFixed(1)}k`;
+                            return n.toString();
+                          };
+                          
+                          const CHART_HEIGHT = 140; // Fixed height in pixels for the bar area
+                          
+                          return (
+                            <div className="mb-3">
+                              {/* Chart area - goal and minimum values on Y-axis */}
+                              <div className="flex gap-4">
+                                {/* Y-axis - goal and minimum values */}
+                                <div className="relative w-11 text-right pr-3" style={{ height: CHART_HEIGHT }}>
+                                  {/* Goal value */}
+                                  <span 
+                                    className="absolute text-[9px] text-accent font-medium transform -translate-y-1/2"
+                                    style={{ bottom: `${(goal / yAxisMax) * 100}%` }}
+                                  >
+                                    {(goal/1000).toFixed(0)}k
+                                  </span>
+                                  {/* Minimum value */}
+                                  <span 
+                                    className="absolute text-[8px] text-success font-medium transform -translate-y-1/2"
+                                    style={{ bottom: `${(minimum / yAxisMax) * 100}%` }}
+                                  >
+                                    {(minimum/1000).toFixed(1)}k
+                                  </span>
+                                </div>
+                                
+                                {/* Bars area */}
+                                <div className="flex-1 relative" style={{ height: CHART_HEIGHT }}>
+                                  {/* Goal reference line */}
+                                  <div 
+                                    className="absolute left-0 right-0 border-t-2 border-dashed border-accent/60 z-10"
+                                    style={{ bottom: `${(goal / yAxisMax) * 100}%` }}
                                   />
-                                );
-                              })}
-                            </Bar>
-                          </BarChart>
-                        </ResponsiveContainer>
-                      ) : (
-                        <div className="h-full flex items-center justify-center text-text-muted">
-                          No hay datos de pasos
-                        </div>
-                      )}
-                    </div>
+                                  {/* Minimum reference line */}
+                                  <div 
+                                    className="absolute left-0 right-0 border-t border-dotted border-success/50 z-10"
+                                    style={{ bottom: `${(minimum / yAxisMax) * 100}%` }}
+                                  />
+                                  
+                                  {/* Bars container */}
+                                  <div className="absolute inset-0 flex items-end justify-between gap-2">
+                                    {stepsChartData.map((day: any, index: number) => {
+                                      const heightPercent = yAxisMax > 0 ? (day.pasos / yAxisMax) * 100 : 0;
+                                      const reachedGoal = day.achieved || day.pasos >= goal;
+                                      const reachedMinimum = day.achievedMinimum || day.pasos >= (day.minimum || stepsStats?.dailyMinimum || 5000);
+                                      const isToday = day.isToday;
+                                      
+                                      return (
+                                        <div 
+                                          key={index} 
+                                          className={cn(
+                                            "flex-1 relative rounded-lg transition-colors",
+                                            isToday && "bg-primary/15"
+                                          )}
+                                          style={{ height: '100%' }}
+                                        >
+                                          {/* Background bar (shadow/track) - full height */}
+                                          <div 
+                                            className="absolute bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[36px] rounded-md bg-text-muted/20"
+                                            style={{ height: '100%' }}
+                                          />
+                                          
+                                          {/* Foreground bar - actual progress */}
+                                          <div 
+                                            className={cn(
+                                              "absolute bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[36px] rounded-md transition-all flex flex-col items-center justify-end pb-1",
+                                              reachedGoal ? "bg-accent" : reachedMinimum ? "bg-success" : "bg-accent/50"
+                                            )}
+                                            style={{ 
+                                              height: `${Math.max(heightPercent, day.pasos > 0 ? 2 : 0)}%`,
+                                              minHeight: day.pasos > 0 ? '24px' : '0px'
+                                            }}
+                                          >
+                                            {/* Icon inside bar - at bottom */}
+                                            {reachedGoal ? (
+                                              <img src="/icons/gorila.png" alt="goal" className="w-6 h-6" />
+                                            ) : reachedMinimum ? (
+                                              <span className="text-sm text-background font-bold">✓</span>
+                                            ) : null}
+                                          </div>
+                                          
+                                          {/* Value on top of bar - positioned absolutely */}
+                                          {day.pasos > 0 && (
+                                            <div 
+                                              className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center"
+                                              style={{ bottom: `calc(${Math.max(heightPercent, 2)}% + 4px)` }}
+                                            >
+                                              <span className={cn(
+                                                "text-[9px] font-medium whitespace-nowrap",
+                                                reachedGoal ? "text-accent" : reachedMinimum ? "text-success" : "text-text-muted"
+                                              )}>
+                                                {formatSteps(day.pasos)}
+                                              </span>
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              {/* X-axis labels */}
+                              <div className="flex gap-4 mt-1">
+                                <div className="w-11" /> {/* Spacer for Y-axis */}
+                                <div className="flex-1 flex justify-between gap-2">
+                                  {stepsChartData.map((day: any, index: number) => {
+                                    const isToday = day.isToday;
+                                    
+                                    return (
+                                      <span 
+                                        key={index}
+                                        className={cn(
+                                          "flex-1 text-[10px] text-center",
+                                          isToday ? "text-primary font-bold" : "text-text-muted"
+                                        )}
+                                      >
+                                        {day.dayShort}
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                      </>
+                    )}
+                    {!loadingSteps && stepsChartData.length === 0 && (
+                      <div className="h-36 flex items-center justify-center text-text-muted">
+                        No hay datos de pasos
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
 
-                {/* Weekly Stats - Uses selected week data */}
-                <Card className="bg-surface/80 border-border">
-                  <CardContent className="p-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-text">
-                          {(stepsStats?.totalSteps || 0).toLocaleString()}
-                        </p>
-                        <p className="text-xs text-text-muted">Total semanal</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-text">
-                          {stepsStats?.daysWithData || 0}/7
-                        </p>
-                        <p className="text-xs text-text-muted">Días con datos</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Daily Records - Editable */}
-                {stepsStats?.stepsByDay?.some((d: any) => d.steps > 0) && (
+                {/* Daily Records - Shows last 5 days (independent of week chart) */}
+                {recentDays?.days?.length > 0 && (
                   <Card className="bg-surface/80 border-border">
                     <CardHeader className="pb-2">
                       <CardTitle className="text-base text-text-secondary">
@@ -738,10 +1015,7 @@ export default function ProgressPage() {
                     </CardHeader>
                     <CardContent className="p-0">
                       <div className="divide-y divide-border">
-                        {stepsStats.stepsByDay
-                          .filter((d: any) => d.steps > 0)
-                          .slice(0, 5)
-                          .map((day: any) => (
+                        {recentDays.days.map((day: any) => (
                             <div
                               key={day.date}
                               className="flex items-center justify-between px-4 py-3"
@@ -788,33 +1062,32 @@ export default function ProgressPage() {
                                 // View mode
                                 <div className="flex items-center gap-2">
                                   <div className="text-right">
-                                    <p className="font-semibold text-text">
-                                      {day.steps.toLocaleString()}
-                                    </p>
-                                    <p className="text-xs text-text-muted">
-                                      {day.achieved ? (
-                                        <span className="text-success">✓ Meta</span>
-                                      ) : (
-                                        <span>{day.percentage}%</span>
-                                      )}
-                                    </p>
+                                    {day.steps > 0 ? (
+                                      <p className="font-semibold text-text">
+                                        {day.steps.toLocaleString()}
+                                      </p>
+                                    ) : (
+                                      <p className="text-sm text-text-muted">—</p>
+                                    )}
                                   </div>
                                   <Button
                                     variant="ghost"
                                     size="icon"
                                     className="h-8 w-8 text-text-muted hover:text-primary"
-                                    onClick={() => handleStartEdit(day.date, day.steps)}
+                                    onClick={() => handleStartEdit(day.date, day.steps || 0)}
                                   >
                                     <Pencil className="w-4 h-4" />
                                   </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 text-text-muted hover:text-red-400"
-                                    onClick={() => handleDeleteSteps(day.date, day.day)}
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </Button>
+                                  {day.steps > 0 && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-text-muted hover:text-red-400"
+                                      onClick={() => handleDeleteSteps(day.date, day.day)}
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  )}
                                 </div>
                               )}
                             </div>

@@ -103,6 +103,7 @@ export default function StudentSettingsPage() {
   
   // Goals
   const [dailyStepsGoal, setDailyStepsGoal] = useState("8000");
+  const [minimumDailySteps, setMinimumDailySteps] = useState("5000");
   const [weeklyWeightGoal, setWeeklyWeightGoal] = useState("0");
   
   // Permissions
@@ -129,6 +130,7 @@ export default function StudentSettingsPage() {
         // Set form values from student
         if (studentData) {
           setDailyStepsGoal(studentData.dailyStepsGoal?.toString() || "8000");
+          setMinimumDailySteps(studentData.minimumDailySteps?.toString() || "5000");
           setWeeklyWeightGoal(studentData.weeklyWeightGoal?.toString() || "0");
           // Permisos - por defecto todo activo si no está definido
           setCanAccessRoutine(studentData.canAccessRoutine !== false);
@@ -241,6 +243,7 @@ export default function StudentSettingsPage() {
       // Save goals
       await updateStudentGoals(studentId, {
         dailyStepsGoal: parseInt(dailyStepsGoal),
+        minimumDailySteps: parseInt(minimumDailySteps),
         weeklyWeightGoal: parseInt(weeklyWeightGoal),
       });
 
@@ -494,6 +497,27 @@ export default function StudentSettingsPage() {
               </div>
               <p className="text-xs text-text-muted mt-1">
                 Recomendado: 8,000 - 10,000 pasos diarios
+              </p>
+            </div>
+
+            {/* Minimum Steps */}
+            <div>
+              <Label className="text-xs text-text-muted flex items-center gap-2 mb-2">
+                <Footprints className="w-3 h-3" />
+                Mínimo de pasos diarios
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  value={minimumDailySteps}
+                  onChange={(e) => setMinimumDailySteps(e.target.value)}
+                  className="flex-1"
+                  placeholder="5000"
+                />
+                <Badge variant="outline" className="px-3">pasos/día</Badge>
+              </div>
+              <p className="text-xs text-text-muted mt-1">
+                Si no puede llegar a la meta, al menos que cumpla este mínimo
               </p>
             </div>
 

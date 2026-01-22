@@ -29,6 +29,7 @@ export interface Student {
   sportId: number;
   permissions: StudentPermissions;
   dailyStepsGoal: number;
+  minimumDailySteps: number;
   weeklyWeightGoal: number | null;
   user?: User;
   sportPlan?: {

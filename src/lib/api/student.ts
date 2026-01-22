@@ -60,6 +60,12 @@ export const getStepsWeeklySummary = async (studentId: number, weekOffset: numbe
   return data;
 };
 
+// Get recent steps days (last N days, independent of week)
+export const getRecentStepsDays = async (studentId: number, limit: number = 5) => {
+  const { data } = await api.get(`/cardio/${studentId}/steps-recent?limit=${limit}`);
+  return data;
+};
+
 // Update steps for a specific date (replaces existing)
 export const updateStepsForDate = async (studentId: number, date: string, steps: number) => {
   // First delete existing, then add new

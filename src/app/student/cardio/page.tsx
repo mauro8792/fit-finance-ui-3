@@ -29,6 +29,7 @@ import { cn, formatDate } from "@/lib/utils";
 interface StepsStats {
   today: number;
   goal: number;
+  minimum: number;
   weeklyAverage: number;
   weeklyTotal: number;
   streak: number;
@@ -112,6 +113,7 @@ export default function CardioPage() {
         setStats({
           today: todaySteps,
           goal: stepsStatsData.dailyGoal || 8000,
+          minimum: stepsStatsData.dailyMinimum || 5000,
           weeklyAverage: stepsStatsData.averageSteps || 0,
           weeklyTotal: stepsStatsData.totalSteps || 0,
           streak: stepsStatsData.daysAchieved || 0,
@@ -228,9 +230,12 @@ export default function CardioPage() {
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-sm text-text-muted">Meta</p>
+                <p className="text-sm text-text-muted">Objetivo</p>
                 <p className="text-lg font-semibold text-primary">
                   {stats?.goal.toLocaleString()}
+                </p>
+                <p className="text-xs text-success">
+                  Mín: {(stats?.minimum || 5000).toLocaleString()}
                 </p>
               </div>
             </div>
@@ -241,7 +246,7 @@ export default function CardioPage() {
               <span className="text-text-muted">{Math.round(progress)}% completado</span>
               {progress >= 100 ? (
                 <Badge className="bg-success/20 text-success">
-                  🎉 ¡Meta cumplida!
+                  🎉 ¡Objetivo cumplido!
                 </Badge>
               ) : (
                 <span className="text-text-muted">
@@ -261,28 +266,61 @@ export default function CardioPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="px-4 pb-4">
-            <div className="flex items-end justify-between gap-1 h-24">
+            <div className="flex items-end justify-between gap-1 h-32">
               {weeklySteps.map((steps, index) => {
-                const height = stats?.goal ? Math.min((steps / stats.goal) * 100, 100) : 0;
+                const goal = stats?.goal || 8000;
+                const minimum = stats?.minimum || 5000;
+                const height = goal ? Math.min((steps / goal) * 100, 100) : 0;
                 const isToday = index === todayIndex;
-                const metGoal = steps >= (stats?.goal || 0);
+                const metGoal = steps >= goal;
+                const metMinimum = steps >= minimum;
+                
+                // Format steps (abbreviate if large)
+                const formatSteps = (n: number) => {
+                  if (n >= 10000) return `${(n/1000).toFixed(0)}k`;
+                  if (n >= 1000) return `${(n/1000).toFixed(1)}k`;
+                  return n.toString();
+                };
 
                 return (
                   <div key={index} className="flex-1 flex flex-col items-center gap-1">
-                    <div className="w-full h-20 flex items-end justify-center">
+                    {/* Value above bar */}
+                    {steps > 0 && (
+                      <span className={cn(
+                        "text-[9px] font-medium",
+                        metGoal ? "text-accent" : metMinimum ? "text-success" : "text-text-muted"
+                      )}>
+                        {formatSteps(steps)}
+                      </span>
+                    )}
+                    <div className="w-full h-16 flex items-end justify-center relative">
+                      {/* Background bar (shadow/track) */}
+                      <div className="absolute bottom-0 w-full max-w-8 h-full rounded-lg bg-text-muted/20" />
+                      
+                      {/* Foreground bar - actual progress */}
                       <motion.div
                         className={cn(
-                          "w-full max-w-8 rounded-t-lg",
+                          "w-full max-w-8 rounded-lg flex flex-col items-center justify-end pb-1 relative z-10",
                           metGoal
-                            ? "bg-gradient-to-t from-success to-success/50"
+                            ? "bg-accent"
+                            : metMinimum
+                            ? "bg-success"
                             : isToday
-                            ? "bg-gradient-to-t from-primary to-primary/50"
-                            : "bg-gradient-to-t from-text-muted/30 to-text-muted/10"
+                            ? "bg-primary/70"
+                            : "bg-accent/50"
                         )}
                         initial={{ height: 0 }}
-                        animate={{ height: `${Math.max(height, 5)}%` }}
+                        animate={{ height: `${Math.max(height, steps > 0 ? 15 : 0)}%` }}
                         transition={{ delay: index * 0.05, duration: 0.3 }}
-                      />
+                        style={{ minHeight: steps > 0 ? '24px' : '0px' }}
+                      >
+                        {/* Icon inside bar - at bottom */}
+                        {metGoal ? (
+                          <img src="/icons/gorila.png" alt="goal" className="w-6 h-6" />
+                        ) : metMinimum ? (
+                          <span className="text-sm text-background font-bold">✓</span>
+                        ) : null}
+                      </motion.div>
                     </div>
                     <span
                       className={cn(

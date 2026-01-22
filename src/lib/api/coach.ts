@@ -33,11 +33,15 @@ export const updateStudentPermissions = async (studentId: number, permissions: a
 
 export const updateStudentGoals = async (
   studentId: number,
-  goals: { dailyStepsGoal?: number; weeklyWeightGoal?: number }
+  goals: { dailyStepsGoal?: number; minimumDailySteps?: number; weeklyWeightGoal?: number }
 ) => {
   // Actualizar pasos goal - endpoint correcto: /cardio/:studentId/steps-goal
   if (goals.dailyStepsGoal !== undefined) {
     await api.put(`/cardio/${studentId}/steps-goal`, { dailyStepsGoal: goals.dailyStepsGoal });
+  }
+  // Actualizar mínimo de pasos
+  if (goals.minimumDailySteps !== undefined) {
+    await api.put(`/cardio/${studentId}/minimum-steps`, { minimumDailySteps: goals.minimumDailySteps });
   }
   // Actualizar peso goal - endpoint correcto: /health/goals/:studentId/weight
   if (goals.weeklyWeightGoal !== undefined) {

@@ -4,7 +4,7 @@ import { create } from "zustand";
 import { getMacrocyclesByStudent } from "@/lib/api/routine";
 import api from "@/lib/api";
 import type { Macrocycle, Mesocycle, Microcycle, Day } from "@/types";
-import type { StudentMesocycle } from "@/types/routine-v2";
+import type { StudentMesocycle, StudentMicrocycle, StudentDay } from "@/types/routine-v2";
 
 interface RoutineState {
   // Data
@@ -29,8 +29,8 @@ interface RoutineState {
   invalidateCache: () => void;
   
   // Computed helpers
-  getCurrentMicro: () => Microcycle | null;
-  getDayById: (dayId: number) => Day | null;
+  getCurrentMicro: () => Microcycle | StudentMicrocycle | null;
+  getDayById: (dayId: number) => Day | StudentDay | null;
 }
 
 // Cache duration: 5 minutes
@@ -210,15 +210,20 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
   },
 
   getCurrentMicro: () => {
-    const { activeMeso, selectedMicroIndex } = get();
+    const { activeMeso, routineV2, isV2, selectedMicroIndex } = get();
+    // Para V2, usar routineV2 (que es el mesocycle)
+    if (isV2 && routineV2) {
+      return routineV2.microcycles?.[selectedMicroIndex] || null;
+    }
     return activeMeso?.microcycles?.[selectedMicroIndex] || null;
   },
 
   getDayById: (dayId: number) => {
-    const { activeMeso } = get();
-    if (!activeMeso) return null;
+    const { activeMeso, routineV2, isV2 } = get();
+    const effectiveMeso = isV2 ? routineV2 : activeMeso;
+    if (!effectiveMeso) return null;
     
-    for (const micro of activeMeso.microcycles || []) {
+    for (const micro of effectiveMeso.microcycles || []) {
       const day = micro.days?.find((d) => d.id === dayId);
       if (day) return day;
     }

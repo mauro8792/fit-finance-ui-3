@@ -66,7 +66,9 @@ export default function StudentDashboard() {
   // Use routine store (cached)
   const { 
     macrocycle, 
-    activeMeso, 
+    activeMeso,
+    routineV2,
+    isV2,
     selectedMicroIndex, 
     loadRoutine,
     getCurrentMicro,
@@ -147,10 +149,13 @@ export default function StudentDashboard() {
   
   // Compute active micro info from store
   const currentMicro = getCurrentMicro();
+  // Para V2, routineV2 es el mesocycle, para V1 es activeMeso
+  const effectiveMeso = isV2 ? routineV2 : activeMeso;
   // También obtener el micro anterior si existe (para mostrar último entreno)
-  const previousMicro = activeMeso?.microcycles?.[selectedMicroIndex - 1] || null;
+  const previousMicro = effectiveMeso?.microcycles?.[selectedMicroIndex - 1] || null;
   
-  const activeMicro = currentMicro && activeMeso && macrocycle ? (() => {
+  // Funciona para V1 (con macrocycle y activeMeso) y V2 (con routineV2)
+  const activeMicro = currentMicro && effectiveMeso ? (() => {
     let totalSets = 0;
     let completedSets = 0;
     let nextWorkout: string | null = null;
@@ -161,20 +166,30 @@ export default function StudentDashboard() {
     today.setHours(0, 0, 0, 0);
     
     // Ordenar días por día si existe
-    const sortedDays = [...(currentMicro.days || [])].sort((a, b) => (a.dia || 0) - (b.dia || 0));
+    // Ordenar días - usar 'order' para V2 (StudentDay) o 'dia' para V1 (Day)
+    const sortedDays = [...(currentMicro.days || [])].sort((a, b) => {
+      const orderA: number = 'order' in a ? (a.order as number) : ('dia' in a ? (a.dia as number) : 0);
+      const orderB: number = 'order' in b ? (b.order as number) : ('dia' in b ? (b.dia as number) : 0);
+      return orderA - orderB;
+    });
     
     // Primero calculamos el estado de cada día
     const daysStatus = sortedDays.map((day, index) => {
       // Recolectar todos los sets para calcular stats
-      const allSets = day.exercises?.flatMap(ex => ex.sets || []) || [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const allSets: any[] = day.exercises?.flatMap((ex: any) => ex.sets || []) || [];
       const dayTotalSets = allSets.length;
-      const completedSetsList = allSets.filter(s => s.status === "completed");
+      // V2 usa isCompleted, V1 usa status === "completed"
+      const completedSetsList = allSets.filter(s => 
+        ('isCompleted' in s ? s.isCompleted : s.status === "completed")
+      );
       const dayCompletedSets = completedSetsList.length;
       
       // Encontrar la fecha más reciente de set completado
+      // V2 usa completedAt, V1 usa updatedAt
       const setDates = completedSetsList
-        .filter(s => s.updatedAt)
-        .map(s => new Date(s.updatedAt!).getTime());
+        .filter(s => ('completedAt' in s ? s.completedAt : s.updatedAt))
+        .map(s => new Date(('completedAt' in s ? s.completedAt : s.updatedAt) as string).getTime());
       const lastSetTimestamp = setDates.length > 0 ? Math.max(...setDates) : null;
       const lastSetDate = lastSetTimestamp ? new Date(lastSetTimestamp) : null;
       
@@ -183,7 +198,9 @@ export default function StudentDashboard() {
       completedSets += dayCompletedSets;
       
       const dayNumber = index + 1;
-      const dayName = day.nombre && day.nombre !== `Día ${dayNumber}` ? day.nombre : `Día ${dayNumber}`;
+      // V2 usa name, V1 usa nombre
+      const dayNameRaw: string | null = 'name' in day ? (day.name as string) : ('nombre' in day ? (day.nombre as string) : null);
+      const dayName: string = dayNameRaw && dayNameRaw !== `Día ${dayNumber}` ? dayNameRaw : `Día ${dayNumber}`;
       
       // Un día se considera "cerrado" si se trabajó antes de hoy (aunque tenga pendientes)
       const wasWorkedBeforeToday = lastSetDate !== null && lastSetDate.getTime() < today.getTime();
@@ -229,22 +246,30 @@ export default function StudentDashboard() {
       lastWorkout = daysStatus[lastWorkedDayIndex].dayName;
     } else {
       // Si no hay último en el micro actual, buscar en micros anteriores
-      const allMicros = activeMeso.microcycles || [];
+      const allMicros = effectiveMeso.microcycles || [];
       for (let microIdx = selectedMicroIndex - 1; microIdx >= 0; microIdx--) {
         const micro = allMicros[microIdx];
         if (!micro) continue;
         
-        const prevDays = [...(micro.days || [])].sort((a, b) => (a.dia || 0) - (b.dia || 0));
+        // Ordenar días - usar 'order' para V2 (StudentDay) o 'dia' para V1 (Day)
+        const prevDays = [...(micro.days || [])].sort((a, b) => {
+          const orderA: number = 'order' in a ? (a.order as number) : ('dia' in a ? (a.dia as number) : 0);
+          const orderB: number = 'order' in b ? (b.order as number) : ('dia' in b ? (b.dia as number) : 0);
+          return orderA - orderB;
+        });
         let found = false;
         
         for (let i = prevDays.length - 1; i >= 0; i--) {
           const day = prevDays[i];
+          // V2 usa isCompleted, V1 usa status === "completed"
           const hasCompletedSets = day.exercises?.some(ex => 
-            ex.sets?.some(s => s.status === "completed")
+            ex.sets?.some(s => ('isCompleted' in s ? s.isCompleted : s.status === "completed"))
           );
           if (hasCompletedSets) {
             const dayNumber = i + 1;
-            lastWorkout = day.nombre && day.nombre !== `Día ${dayNumber}` ? day.nombre : `Día ${dayNumber}`;
+            // V2 usa name, V1 usa nombre
+            const dayNameVal: string | null = 'name' in day ? (day.name as string) : ('nombre' in day ? (day.nombre as string) : null);
+            lastWorkout = dayNameVal && dayNameVal !== `Día ${dayNumber}` ? dayNameVal : `Día ${dayNumber}`;
             lastWorkoutMicroIndex = microIdx;
             found = true;
             break;
@@ -307,14 +332,14 @@ export default function StudentDashboard() {
     }
     
     // Verificar si el siguiente micro existe
-    const totalMicros = activeMeso.microcycles?.length || 0;
+    const totalMicros = effectiveMeso.microcycles?.length || 0;
     const nextMicroExists = nextMicroIndex < totalMicros;
     
     return {
       micro: currentMicro,
       microIndex: selectedMicroIndex,
-      mesoName: activeMeso.name,
-      macroName: macrocycle.name,
+      mesoName: effectiveMeso.name,
+      macroName: macrocycle?.name || effectiveMeso.name, // En V2 no hay macrocycle separado
       totalSets,
       completedSets,
       nextWorkout: nextMicroExists || nextMicroIndex === selectedMicroIndex ? nextWorkout : null,

@@ -34,6 +34,16 @@ export const useAuthStore = create<AuthState & AuthActions>()(
       login: async (email: string, password: string) => {
         try {
           set({ status: "checking", error: null });
+          
+          // Limpiar caches de sesiones anteriores antes de login
+          // Esto evita que datos de otro usuario persistan
+          sessionStorage.clear();
+          
+          // Limpiar localStorage excepto el store de auth (para no interrumpir el proceso de login)
+          const authStoreKey = 'auth-storage';
+          const authData = localStorage.getItem(authStoreKey);
+          localStorage.clear();
+          if (authData) localStorage.setItem(authStoreKey, authData);
 
           const { data } = await api.post("/auth/login", { email, password });
           const { token, student, userType, profiles, hasMultipleProfiles } = data;

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { useAuthStore } from "@/stores/auth-store";
 import { getDashboardSummary, getWeightHistory, getStepsWeeklySummary, getStepsWeeklyStats, getRecentStepsDays, updateStepsForDate, deleteStepsForDate, updateWeight, deleteWeight } from "@/lib/api/student";
+import { getWeightWeeklyStats } from "@/lib/api/health";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -64,6 +65,8 @@ export default function ProgressPage() {
   const [weeklyAverages, setWeeklyAverages] = useState<any>(null);
   const [weeklyAvgOffset, setWeeklyAvgOffset] = useState(0);
   const [weekOffset, setWeekOffset] = useState(0);
+  const [weightWeeklyStats, setWeightWeeklyStats] = useState<any>(null);
+  const [weightWeeklyOffset, setWeightWeeklyOffset] = useState(0);
   const [loadingSteps, setLoadingSteps] = useState(false);
   const [recentDays, setRecentDays] = useState<any>(null); // For daily records section
   
@@ -91,18 +94,20 @@ export default function ProgressPage() {
 
       try {
         setLoading(true);
-        const [summaryData, weightData, stepsData, weeklyData, recentData] = await Promise.all([
+        const [summaryData, weightData, stepsData, weeklyData, recentData, weightWeeklyData] = await Promise.all([
           getDashboardSummary(student.id).catch(() => null),
           getWeightHistory(student.id, 100).catch(() => []),
           getStepsWeeklySummary(student.id, 0).catch(() => null),
           getStepsWeeklyStats(student.id).catch(() => null),
           getRecentStepsDays(student.id, 5).catch(() => null),
+          getWeightWeeklyStats(student.id).catch(() => null),
         ]);
         setSummary(summaryData);
         setWeightHistory(weightData);
         setStepsStats(stepsData);
         setWeeklyAverages(weeklyData);
         setRecentDays(recentData);
+        setWeightWeeklyStats(weightWeeklyData);
         
         // Cache the current week's data
         if (stepsData) {
@@ -426,6 +431,201 @@ export default function ProgressPage() {
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* Weekly Weight Averages Chart */}
+                {weightWeeklyStats?.hasData && weightWeeklyStats?.weeks?.length > 0 && (
+                  <Card className="bg-surface/80 border-border">
+                    <CardHeader className="pb-2">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-base text-text-secondary flex items-center gap-2">
+                          <Target className="w-4 h-4 text-primary" />
+                          Promedios semanales
+                        </CardTitle>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => setWeightWeeklyOffset(prev => prev + 1)}
+                            disabled={weightWeeklyOffset >= Math.max(0, (weightWeeklyStats?.weeks?.length || 0) - 4)}
+                          >
+                            <ChevronLeft className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => setWeightWeeklyOffset(prev => Math.max(0, prev - 1))}
+                            disabled={weightWeeklyOffset === 0}
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="px-4 pb-4">
+                      {(() => {
+                        const allWeeks = weightWeeklyStats?.weeks || [];
+                        const VISIBLE_COUNT = 8; // Máximo 8 semanas visibles, luego navegar con flechas
+                        const startIdx = Math.max(0, allWeeks.length - VISIBLE_COUNT - weightWeeklyOffset);
+                        const endIdx = allWeeks.length - weightWeeklyOffset;
+                        const visibleWeeks = allWeeks.slice(startIdx, endIdx);
+                        const currentWeekIdx = allWeeks.length - 1 - weightWeeklyOffset;
+                        
+                        // Calculate min/max for scaling
+                        const allAvgs = visibleWeeks.map((w: any) => w.averageWeight);
+                        const minWeight = Math.min(...allAvgs) - 0.5;
+                        const maxWeight = Math.max(...allAvgs) + 0.5;
+                        const range = maxWeight - minWeight;
+                        
+                        const CHART_HEIGHT = 140;
+                        
+                        // Format weight (e.g., 79.5)
+                        const formatWeight = (w: number) => w.toFixed(1);
+                        
+                        return (
+                          <div className="mb-3">
+                            {/* Chart area */}
+                            <div className="flex gap-4">
+                              {/* Y-axis labels */}
+                              <div className="relative w-11 text-right pr-3" style={{ height: CHART_HEIGHT }}>
+                                <span 
+                                  className="absolute text-[9px] text-text-muted font-medium transform -translate-y-1/2"
+                                  style={{ top: '0%' }}
+                                >
+                                  {maxWeight.toFixed(1)}
+                                </span>
+                                <span 
+                                  className="absolute text-[9px] text-text-muted font-medium transform -translate-y-1/2"
+                                  style={{ top: '100%' }}
+                                >
+                                  {minWeight.toFixed(1)}
+                                </span>
+                              </div>
+                              
+                              {/* Bars area */}
+                              <div className="flex-1 relative" style={{ height: CHART_HEIGHT }}>
+                                {/* Bars container */}
+                                <div className="absolute inset-0 flex items-end justify-between gap-1">
+                                  {visibleWeeks.map((week: any, index: number) => {
+                                    const heightPercent = range > 0 ? ((week.averageWeight - minWeight) / range) * 100 : 50;
+                                    const isCurrentWeek = startIdx + index === currentWeekIdx;
+                                    const isDown = week.variationGrams !== null && week.variationGrams < 0;
+                                    const isUp = week.variationGrams !== null && week.variationGrams > 0;
+                                    
+                                    return (
+                                      <div 
+                                        key={index} 
+                                        className={cn(
+                                          "flex-1 relative rounded-lg transition-colors",
+                                          isCurrentWeek && "bg-primary/15"
+                                        )}
+                                        style={{ height: '100%' }}
+                                      >
+                                        {/* Background bar (track) */}
+                                        <div 
+                                          className="absolute bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[32px] rounded-md bg-text-muted/20"
+                                          style={{ height: '100%' }}
+                                        />
+                                        
+                                        {/* Foreground bar */}
+                                        <div 
+                                          className={cn(
+                                            "absolute bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[32px] rounded-md transition-all flex flex-col items-center justify-end pb-1",
+                                            isDown ? "bg-success" : isUp ? "bg-warning" : "bg-primary"
+                                          )}
+                                          style={{ 
+                                            height: `${Math.max(heightPercent, 10)}%`,
+                                            minHeight: '28px'
+                                          }}
+                                        >
+                                          {/* Variation indicator inside bar */}
+                                          {week.variationGrams !== null && (
+                                            <span className={cn(
+                                              "text-[9px] font-bold",
+                                              isDown ? "text-background" : "text-background"
+                                            )}>
+                                              {isDown ? "↓" : isUp ? "↑" : "–"}
+                                            </span>
+                                          )}
+                                        </div>
+                                        
+                                        {/* Value on top of bar */}
+                                        <div 
+                                          className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center"
+                                          style={{ bottom: `calc(${Math.max(heightPercent, 10)}% + 4px)` }}
+                                        >
+                                          <span className={cn(
+                                            "text-[10px] font-semibold whitespace-nowrap",
+                                            isDown ? "text-success" : isUp ? "text-warning" : "text-primary"
+                                          )}>
+                                            {formatWeight(week.averageWeight)}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* X-axis labels */}
+                            <div className="flex gap-4 mt-1">
+                              <div className="w-11" /> {/* Spacer */}
+                              <div className="flex-1 flex justify-between gap-1">
+                                {visibleWeeks.map((week: any, index: number) => {
+                                  const isCurrentWeek = startIdx + index === currentWeekIdx;
+                                  const weekDate = new Date(week.weekStart + 'T12:00:00');
+                                  const dayNum = weekDate.getDate();
+                                  const monthShort = weekDate.toLocaleDateString('es', { month: 'short' }).replace('.', '');
+                                  
+                                  return (
+                                    <span 
+                                      key={index}
+                                      className={cn(
+                                        "flex-1 text-[10px] text-center",
+                                        isCurrentWeek ? "text-primary font-bold" : "text-text-muted"
+                                      )}
+                                    >
+                                      {dayNum}/{monthShort}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                      
+                      {/* Stats summary */}
+                      <div className="flex justify-between pt-3 border-t border-border">
+                        <div className="text-center">
+                          <p className="text-lg font-bold text-text">
+                            {weightWeeklyStats?.weeks?.[weightWeeklyStats.weeks.length - 1 - weightWeeklyOffset]?.averageWeight?.toFixed(2) || "--"}
+                          </p>
+                          <p className="text-xs text-text-muted">Promedio semana</p>
+                        </div>
+                        <div className="text-center">
+                          <p className={cn(
+                            "text-lg font-bold",
+                            (weightWeeklyStats?.weeks?.[weightWeeklyStats.weeks.length - 1 - weightWeeklyOffset]?.variationGrams || 0) < 0 
+                              ? "text-success" 
+                              : (weightWeeklyStats?.weeks?.[weightWeeklyStats.weeks.length - 1 - weightWeeklyOffset]?.variationGrams || 0) > 0 
+                                ? "text-warning" 
+                                : "text-text"
+                          )}>
+                            {(() => {
+                              const grams = weightWeeklyStats?.weeks?.[weightWeeklyStats.weeks.length - 1 - weightWeeklyOffset]?.variationGrams;
+                              if (grams === null || grams === undefined) return "--";
+                              return `${grams > 0 ? "+" : ""}${grams}g`;
+                            })()}
+                          </p>
+                          <p className="text-xs text-text-muted">vs semana anterior</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* Weight Chart */}
                 <Card className="bg-surface/80 border-border">

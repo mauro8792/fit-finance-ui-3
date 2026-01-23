@@ -292,25 +292,19 @@ export default function StudentDashboard() {
     let nextMicroIndex = selectedMicroIndex; // Por defecto, mismo micro
     
     if (lastWorkedToday && lastWorkedDayIndex >= 0) {
-      // Si se trabajó hoy, el próximo es:
-      // - El mismo día si no está completo
-      // - El siguiente día si está completo
-      const currentDay = daysStatus[lastWorkedDayIndex];
-      if (!currentDay.isCompleted) {
-        nextWorkout = currentDay.dayName;
-      } else {
-        // Buscar el siguiente día no completado
-        for (let i = lastWorkedDayIndex + 1; i < daysStatus.length; i++) {
-          if (daysStatus[i].hasSets && !daysStatus[i].isCompleted) {
-            nextWorkout = daysStatus[i].dayName;
-            break;
-          }
+      // Si se trabajó hoy, el próximo es SIEMPRE el siguiente día
+      // (independientemente de si completó todos los sets del día actual)
+      // El usuario ya entrenó hoy, mañana va por el siguiente día
+      for (let i = lastWorkedDayIndex + 1; i < daysStatus.length; i++) {
+        if (daysStatus[i].hasSets && !daysStatus[i].isCompleted) {
+          nextWorkout = daysStatus[i].dayName;
+          break;
         }
-        // Si no hay más días en este micro, pasar al siguiente
-        if (!nextWorkout) {
-          nextMicroIndex = selectedMicroIndex + 1;
-          nextWorkout = "Día 1"; // Primer día del siguiente micro
-        }
+      }
+      // Si no hay más días en este micro, pasar al siguiente
+      if (!nextWorkout) {
+        nextMicroIndex = selectedMicroIndex + 1;
+        nextWorkout = "Día 1"; // Primer día del siguiente micro
       }
     } else {
       // Si se trabajó antes de hoy (o nunca), el próximo es el siguiente día en orden

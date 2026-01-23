@@ -270,7 +270,16 @@ export const addStudentExerciseWithSets = async (dayId: string, dto: AddExercise
   return data;
 };
 
-export const updateStudentExercise = async (exerciseId: string, dto: Partial<AddExerciseDto>): Promise<StudentExercise> => {
+export interface UpdateStudentExerciseDto {
+  targetReps?: string;
+  restSeconds?: number;
+  targetRir?: number;
+  targetRpe?: number;
+  coachNotes?: string;
+  notes?: string;
+}
+
+export const updateStudentExercise = async (exerciseId: string, dto: UpdateStudentExerciseDto): Promise<StudentExercise> => {
   const { data } = await api.patch(`${STUDENT_BASE_URL}/exercises/${exerciseId}`, dto);
   return data;
 };
@@ -302,6 +311,26 @@ export const addMyExtraSet = async (exerciseId: string, dto: AddSetDto): Promise
 
 export const updateStudentSet = async (setId: string, dto: Partial<AddSetDto>): Promise<StudentSet> => {
   const { data } = await api.patch(`${STUDENT_BASE_URL}/sets/${setId}`, dto);
+  return data;
+};
+
+/**
+ * Actualizar múltiples sets de un ejercicio en batch (más eficiente)
+ */
+export const updateStudentSetsBatch = async (
+  exerciseId: string,
+  sets: Array<{
+    id: string;
+    targetReps?: string;
+    targetLoad?: number;
+    targetRir?: number;
+    targetRpe?: number;
+    isAmrap?: boolean;
+    isDropSet?: boolean;
+    dropSetCount?: number;
+  }>
+): Promise<StudentSet[]> => {
+  const { data } = await api.patch(`${STUDENT_BASE_URL}/exercises/${exerciseId}/sets/batch`, { sets });
   return data;
 };
 

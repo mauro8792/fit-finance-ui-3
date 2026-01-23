@@ -42,6 +42,8 @@ import {
   Search,
   Check,
   Loader2,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useStudentRoutine } from "@/hooks/useRoutineV2";
@@ -73,10 +75,12 @@ function SortableExerciseCard({
   exercise,
   onEdit,
   onDelete,
+  deleting = false,
 }: {
   exercise: StudentExercise;
   onEdit: () => void;
   onDelete: () => void;
+  deleting?: boolean;
 }) {
   const {
     attributes,
@@ -122,15 +126,21 @@ function SortableExerciseCard({
           <div className="flex items-center gap-2">
             <button
               onClick={onEdit}
-              className="p-2 rounded-lg hover:bg-white/5 text-gray-500 hover:text-white transition-colors"
+              disabled={deleting}
+              className="p-2 rounded-lg hover:bg-white/5 text-gray-500 hover:text-white transition-colors disabled:opacity-50"
             >
               <Edit3 className="w-4 h-4" />
             </button>
             <button
               onClick={onDelete}
-              className="p-2 rounded-lg hover:bg-red-500/10 text-gray-500 hover:text-red-400 transition-colors"
+              disabled={deleting}
+              className="p-2 rounded-lg hover:bg-red-500/10 text-gray-500 hover:text-red-400 transition-colors disabled:opacity-50"
             >
-              <Trash2 className="w-4 h-4" />
+              {deleting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4" />
+              )}
             </button>
           </div>
         </div>
@@ -243,6 +253,7 @@ export default function EditStudentRoutinePage() {
 
   const { routine, loading, error, refetch } = useStudentRoutine(routineId);
   const [saving, setSaving] = useState(false);
+  const [deletingExerciseId, setDeletingExerciseId] = useState<string | null>(null);
 
   // Navigation
   const [currentMicroIndex, setCurrentMicroIndex] = useState(0);
@@ -412,6 +423,7 @@ export default function EditStudentRoutinePage() {
 
   // Delete exercise
   const handleDeleteExercise = async (exerciseId: string) => {
+    setDeletingExerciseId(exerciseId);
     try {
       await routineV2Api.deleteStudentExercise(exerciseId);
       await refetch();
@@ -419,25 +431,42 @@ export default function EditStudentRoutinePage() {
     } catch (err) {
       console.error("Error deleting exercise:", err);
       toast.error("Error al eliminar");
+    } finally {
+      setDeletingExerciseId(null);
     }
   };
 
   // Edit exercise
   const handleEditExercise = (exercise: StudentExercise) => {
     setEditingExercise(exercise);
-    setNotes(exercise.notes || "");
-    setRest("2"); // Default if not available
+    setNotes(exercise.coachNotes || "");
+    setRepsRange(exercise.targetReps || "10-12");
+    setRir(exercise.targetRir?.toString() || "");
+    setRpe(exercise.targetRpe?.toString() || "");
+    setRest(((exercise.restSeconds || 120) / 60).toString());
+    setSeriesCount((exercise.sets?.length || 3).toString());
+    // Check if last set is AMRAP or Drop Set
+    const lastSet = exercise.sets?.slice().sort((a, b) => a.order - b.order).pop();
+    setIncludeAmrap(lastSet?.isAmrap || false);
+    setIncludeDropSet(lastSet?.isDropSet || false);
+    setDropSetCount((lastSet?.dropSetCount || 2).toString());
+    setKg(lastSet?.targetLoad?.toString() || "");
     setShowEditExercise(true);
   };
 
-  // Save edit
+  // Save edit (simple - just notes)
   const handleSaveEdit = async () => {
     if (!editingExercise) return;
     
     setSaving(true);
     try {
+      // Update exercise config
       await routineV2Api.updateStudentExercise(editingExercise.id, {
-        notes: notes || undefined,
+        targetReps: repsRange || undefined,
+        restSeconds: rest ? parseInt(rest) * 60 : 120,
+        targetRir: rir ? parseInt(rir) : undefined,
+        targetRpe: rpe ? parseInt(rpe) : undefined,
+        coachNotes: notes || undefined,
       });
       await refetch();
       setShowEditExercise(false);
@@ -448,6 +477,114 @@ export default function EditStudentRoutinePage() {
       toast.error("Error al guardar");
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Save edit complete - recreate sets if count changed
+  const handleSaveEditComplete = async () => {
+    if (!editingExercise) return;
+    
+    setSaving(true);
+    try {
+      const count = parseInt(seriesCount) || 3;
+      const currentCount = editingExercise.sets?.length || 0;
+      
+      // Update exercise config
+      await routineV2Api.updateStudentExercise(editingExercise.id, {
+        targetReps: repsRange || undefined,
+        restSeconds: rest ? parseInt(rest) * 60 : 120,
+        targetRir: rir ? parseInt(rir) : undefined,
+        targetRpe: rpe ? parseInt(rpe) : undefined,
+        coachNotes: notes || undefined,
+      });
+
+      // If series count changed, delete old and create new
+      if (count !== currentCount) {
+        // Delete existing sets
+        for (const set of editingExercise.sets || []) {
+          await routineV2Api.deleteStudentSet(set.id);
+        }
+        
+        // Create new sets
+        for (let i = 0; i < count; i++) {
+          const isLast = i === count - 1;
+          await routineV2Api.addStudentSet(editingExercise.id, {
+            targetReps: (isLast && includeAmrap) ? "AMRAP" : repsRange,
+            targetLoad: kg ? parseFloat(kg) : undefined,
+            targetRir: rir ? parseInt(rir) : undefined,
+            targetRpe: rpe ? parseInt(rpe) : undefined,
+            isAmrap: isLast && includeAmrap,
+            isDropSet: isLast && includeDropSet,
+            dropSetCount: (isLast && includeDropSet) ? parseInt(dropSetCount) : undefined,
+          });
+        }
+      } else {
+        // Update all sets in batch (single API call)
+        const sortedSets = editingExercise.sets?.slice().sort((a, b) => a.order - b.order) || [];
+        const setsToUpdate = sortedSets.map((set, idx) => {
+          const isLast = idx === sortedSets.length - 1;
+          return {
+            id: set.id,
+            targetReps: (isLast && includeAmrap) ? "AMRAP" : repsRange,
+            targetLoad: kg ? parseFloat(kg) : undefined,
+            targetRir: rir ? parseInt(rir) : undefined,
+            isAmrap: isLast && includeAmrap,
+            isDropSet: isLast && includeDropSet,
+            dropSetCount: (isLast && includeDropSet) ? parseInt(dropSetCount) : undefined,
+          };
+        });
+        
+        // Single batch call instead of multiple individual calls
+        await routineV2Api.updateStudentSetsBatch(editingExercise.id, setsToUpdate);
+      }
+
+      await refetch();
+      setShowEditExercise(false);
+      setEditingExercise(null);
+      toast.success("Cambios guardados");
+    } catch (err) {
+      console.error("Error updating:", err);
+      toast.error("Error al guardar");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Update a single set
+  const handleUpdateSet = async (setId: string, data: Partial<StudentSet>) => {
+    try {
+      await routineV2Api.updateStudentSet(setId, data);
+      await refetch();
+    } catch (err) {
+      console.error("Error updating set:", err);
+      toast.error("Error al actualizar serie");
+    }
+  };
+
+  // Delete a set
+  const handleDeleteSet = async (setId: string) => {
+    try {
+      await routineV2Api.deleteStudentSet(setId);
+      await refetch();
+      toast.success("Serie eliminada");
+    } catch (err) {
+      console.error("Error deleting set:", err);
+      toast.error("Error al eliminar serie");
+    }
+  };
+
+  // Add a set to exercise
+  const handleAddSetToExercise = async (exerciseId: string) => {
+    try {
+      await routineV2Api.addStudentSet(exerciseId, {
+        targetReps: repsRange || "10",
+        targetRir: rir ? parseInt(rir) : undefined,
+      });
+      await refetch();
+      toast.success("Serie agregada");
+    } catch (err) {
+      console.error("Error adding set:", err);
+      toast.error("Error al agregar serie");
     }
   };
 
@@ -663,60 +800,89 @@ export default function EditStudentRoutinePage() {
           </Button>
         </div>
 
-        {/* Microcycle selector */}
+        {/* Microcycle selector - improved navigation */}
         <div className="px-4 pb-3">
-          <div className="flex gap-2 overflow-x-auto pb-2 items-center">
-            {sortedMicrocycles.map((m, idx) => (
-              <div key={m.id} className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center justify-center gap-3">
+            {/* Left arrow */}
+            <button
+              onClick={() => {
+                if (currentMicroIndex > 0) {
+                  setCurrentMicroIndex(currentMicroIndex - 1);
+                  setCurrentDayIndex(0);
+                }
+              }}
+              disabled={currentMicroIndex === 0}
+              className={cn(
+                "w-10 h-10 rounded-full flex items-center justify-center transition-all",
+                currentMicroIndex === 0
+                  ? "bg-[#1a1a24]/50 text-gray-600 cursor-not-allowed"
+                  : "bg-[#1a1a24] text-gray-300 hover:bg-[#252530] hover:text-white"
+              )}
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+
+            {/* Current microcycle display */}
+            <div className="flex flex-col items-center min-w-[140px]">
+              <div className={cn(
+                "px-6 py-2.5 rounded-xl text-base font-bold transition-all flex items-center gap-2",
+                currentMicrocycle?.isDeload
+                  ? "bg-blue-500 text-white"
+                  : "bg-amber-500 text-black"
+              )}>
+                <span>Microciclo {currentMicrocycle?.order || currentMicroIndex + 1}</span>
                 <button
-                  onClick={() => {
-                    setCurrentMicroIndex(idx);
-                    setCurrentDayIndex(0);
-                  }}
+                  onClick={() => setShowMicrocycleOptions(true)}
                   className={cn(
-                    "px-4 py-1.5 rounded-full text-sm font-medium transition-all whitespace-nowrap relative",
-                    m.isDeload
-                      ? idx === currentMicroIndex
-                        ? "bg-blue-500 text-white"
-                        : "bg-blue-500/30 text-blue-300 hover:bg-blue-500/50"
-                      : idx === currentMicroIndex
-                        ? "bg-amber-500 text-black"
-                        : "bg-[#1a1a24] text-gray-400 hover:bg-[#252530]"
+                    "w-6 h-6 rounded-full flex items-center justify-center transition-all",
+                    currentMicrocycle?.isDeload
+                      ? "bg-blue-600/50 hover:bg-blue-600 text-white"
+                      : "bg-amber-600/50 hover:bg-amber-600 text-black"
                   )}
+                  title="Configurar microciclo"
                 >
-                  M{m.order}
-                  {m.isDeload && (
-                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-blue-400 rounded-full" />
-                  )}
+                  <Edit3 className="w-3 h-3" />
                 </button>
-                {/* Config button - only show for selected microcycle */}
-                {idx === currentMicroIndex && (
-                  <button
-                    onClick={() => setShowMicrocycleOptions(true)}
-                    className="w-6 h-6 rounded-full bg-[#1a1a24] hover:bg-[#252530] flex items-center justify-center text-gray-400 hover:text-white transition-all"
-                    title="Configurar microciclo"
-                  >
-                    <Edit3 className="w-3 h-3" />
-                  </button>
-                )}
               </div>
-            ))}
+              <span className="text-xs text-gray-500 mt-1">
+                {currentMicroIndex + 1} de {sortedMicrocycles.length}
+              </span>
+              {currentMicrocycle?.isDeload && (
+                <span className="text-xs text-blue-400 flex items-center gap-1 mt-0.5">
+                  <span className="w-1.5 h-1.5 bg-blue-400 rounded-full" />
+                  Semana de descarga
+                </span>
+              )}
+            </div>
+
+            {/* Right arrow */}
+            <button
+              onClick={() => {
+                if (currentMicroIndex < sortedMicrocycles.length - 1) {
+                  setCurrentMicroIndex(currentMicroIndex + 1);
+                  setCurrentDayIndex(0);
+                }
+              }}
+              disabled={currentMicroIndex >= sortedMicrocycles.length - 1}
+              className={cn(
+                "w-10 h-10 rounded-full flex items-center justify-center transition-all",
+                currentMicroIndex >= sortedMicrocycles.length - 1
+                  ? "bg-[#1a1a24]/50 text-gray-600 cursor-not-allowed"
+                  : "bg-[#1a1a24] text-gray-300 hover:bg-[#252530] hover:text-white"
+              )}
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+
             {/* Add microcycle button */}
             <button
               onClick={handleAddMicrocycle}
-              className="w-8 h-8 rounded-full bg-[#1a1a24] hover:bg-[#252530] border border-dashed border-gray-700 flex items-center justify-center text-gray-500 hover:text-amber-500 transition-all shrink-0"
+              className="w-10 h-10 rounded-full bg-[#1a1a24] hover:bg-[#252530] border border-dashed border-gray-700 flex items-center justify-center text-gray-500 hover:text-amber-500 transition-all"
               title="Agregar microciclo"
             >
               <Plus className="w-4 h-4" />
             </button>
           </div>
-          {/* Deload indicator */}
-          {currentMicrocycle?.isDeload && (
-            <div className="mt-2 flex items-center gap-2 text-xs text-blue-400">
-              <span className="w-2 h-2 bg-blue-400 rounded-full" />
-              Semana de descarga
-            </div>
-          )}
         </div>
 
         {/* Day selector */}
@@ -784,6 +950,7 @@ export default function EditStudentRoutinePage() {
                   exercise={exercise}
                   onEdit={() => handleEditExercise(exercise)}
                   onDelete={() => handleDeleteExercise(exercise.id)}
+                  deleting={deletingExerciseId === exercise.id}
                 />
               ))}
             </div>
@@ -1081,34 +1248,201 @@ export default function EditStudentRoutinePage() {
 
       {/* Sheet: Editar ejercicio */}
       <Sheet open={showEditExercise} onOpenChange={setShowEditExercise}>
-        <SheetContent side="bottom" className="bg-[#13131a] border-[#1e1e2a] rounded-t-2xl mx-auto max-w-[420px] sm:max-w-[480px]">
-          <SheetHeader className="pb-4">
-            <SheetTitle className="text-white">
-              Editar {editingExercise?.exerciseCatalog?.name}
+        <SheetContent side="bottom" className="bg-[#13131a] border-[#1e1e2a] h-[85vh] rounded-t-2xl overflow-y-auto w-full max-w-full px-4">
+          <SheetHeader className="pb-3">
+            <SheetTitle className="text-white flex items-center gap-2 text-base">
+              <Dumbbell className="w-5 h-5 text-amber-500 shrink-0" />
+              <span className="truncate">{editingExercise?.exerciseCatalog?.name}</span>
             </SheetTitle>
             <SheetDescription className="text-gray-500">
-              Modificá las notas del ejercicio
+              {editingExercise?.exerciseCatalog?.muscleGroup} · Configurá las series y repeticiones
             </SheetDescription>
           </SheetHeader>
 
-          <div className="space-y-4 pb-4">
+          <div className="space-y-4 pb-24 px-1">
+            {/* Quick presets */}
             <div>
-              <Label className="text-xs text-gray-400 mb-2 block">Notas</Label>
+              <Label className="text-[11px] text-gray-400 mb-1.5 block">Presets rápidos</Label>
+              <div className="grid grid-cols-4 gap-1.5">
+                {[
+                  { label: "3x10-12", series: "3", reps: "10-12", r: "2", p: "" },
+                  { label: "4x8-10", series: "4", reps: "8-10", r: "2", p: "" },
+                  { label: "3x15", series: "3", reps: "15", r: "1", p: "" },
+                  { label: "5x5", series: "5", reps: "5", r: "", p: "8" },
+                ].map((preset) => (
+                  <button
+                    key={preset.label}
+                    onClick={() => {
+                      setSeriesCount(preset.series);
+                      setRepsRange(preset.reps);
+                      setRir(preset.r);
+                      setRpe(preset.p);
+                    }}
+                    className="px-2 py-1.5 rounded-lg text-xs bg-[#1a1a24] text-gray-300 hover:bg-amber-500/20 hover:text-amber-400 transition-colors"
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Series count + reps */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-[11px] text-gray-400 mb-1.5 block">Series</Label>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  value={seriesCount}
+                  onChange={(e) => setSeriesCount(e.target.value)}
+                  className="bg-[#1a1a24] border-[#2a2a35] text-white text-center text-base font-semibold h-11"
+                />
+              </div>
+              <div>
+                <Label className="text-[11px] text-gray-400 mb-1.5 block">Reps</Label>
+                <Input
+                  type="text"
+                  value={repsRange}
+                  onChange={(e) => setRepsRange(e.target.value)}
+                  placeholder="10-12"
+                  className="bg-[#1a1a24] border-[#2a2a35] text-white text-center text-base font-semibold h-11"
+                />
+              </div>
+            </div>
+
+            {/* RIR + RPE + Kg + Rest - 4 columns */}
+            <div className="grid grid-cols-4 gap-2">
+              <div>
+                <Label className="text-[10px] text-gray-400 mb-1 block">RIR</Label>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  value={rir}
+                  onChange={(e) => setRir(e.target.value)}
+                  placeholder="—"
+                  className="bg-[#1a1a24] border-[#2a2a35] text-white text-center text-sm h-10"
+                />
+              </div>
+              <div>
+                <Label className="text-[10px] text-gray-400 mb-1 block">RPE</Label>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  value={rpe}
+                  onChange={(e) => setRpe(e.target.value)}
+                  placeholder="—"
+                  className="bg-[#1a1a24] border-[#2a2a35] text-white text-center text-sm h-10"
+                />
+              </div>
+              <div>
+                <Label className="text-[10px] text-gray-400 mb-1 block">Kg</Label>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={kg}
+                  onChange={(e) => setKg(e.target.value)}
+                  placeholder="—"
+                  className="bg-[#1a1a24] border-[#2a2a35] text-white text-center text-sm h-10"
+                />
+              </div>
+              <div>
+                <Label className="text-[10px] text-gray-400 mb-1 block">Desc.</Label>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={rest}
+                  onChange={(e) => setRest(e.target.value)}
+                  placeholder="2"
+                  className="bg-[#1a1a24] border-[#2a2a35] text-white text-center text-sm h-10"
+                />
+              </div>
+            </div>
+
+            {/* AMRAP / Drop Set toggles */}
+            <div className="space-y-2">
+              <Label className="text-[11px] text-gray-400 block">Última serie especial</Label>
+              
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => {
+                    setIncludeAmrap(!includeAmrap);
+                    if (!includeAmrap) setIncludeDropSet(false);
+                  }}
+                  className={cn(
+                    "p-3 rounded-lg flex flex-col items-center gap-1.5 transition-all",
+                    includeAmrap
+                      ? "bg-purple-600/20 border border-purple-500/50"
+                      : "bg-[#1a1a24] border border-transparent"
+                  )}
+                >
+                  <Flame className={cn("w-5 h-5", includeAmrap ? "text-purple-400" : "text-gray-500")} />
+                  <span className="text-xs font-medium text-white">AMRAP</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIncludeDropSet(!includeDropSet);
+                    if (!includeDropSet) setIncludeAmrap(false);
+                  }}
+                  className={cn(
+                    "p-3 rounded-lg flex flex-col items-center gap-1.5 transition-all",
+                    includeDropSet
+                      ? "bg-orange-600/20 border border-orange-500/50"
+                      : "bg-[#1a1a24] border border-transparent"
+                  )}
+                >
+                  <ArrowDownToLine className={cn("w-5 h-5", includeDropSet ? "text-orange-400" : "text-gray-500")} />
+                  <span className="text-xs font-medium text-white">Drop Set</span>
+                </button>
+              </div>
+
+              {/* Drop set count */}
+              {includeDropSet && (
+                <div className="flex items-center gap-2 pt-1">
+                  <Label className="text-[11px] text-gray-400">Drops:</Label>
+                  <div className="flex gap-1.5">
+                    {["1", "2", "3"].map((n) => (
+                      <button
+                        key={n}
+                        onClick={() => setDropSetCount(n)}
+                        className={cn(
+                          "w-9 h-8 rounded-lg text-sm font-medium transition-all",
+                          dropSetCount === n
+                            ? "bg-orange-600 text-white"
+                            : "bg-[#1a1a24] text-gray-400"
+                        )}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Notes */}
+            <div>
+              <Label className="text-[11px] text-gray-400 mb-1.5 block">Notas para el alumno</Label>
               <Textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                className="bg-[#1a1a24] border-[#2a2a35] text-white min-h-[80px]"
+                placeholder="Ej: Agarre supino, controlar la bajada..."
+                className="bg-[#1a1a24] border-[#2a2a35] text-white min-h-[60px] text-sm"
               />
             </div>
           </div>
 
-          <SheetFooter className="sticky bottom-0 py-4 bg-[#13131a] border-t border-[#1e1e2a]">
+          <SheetFooter className="sticky bottom-0 left-0 right-0 py-4 bg-[#13131a] border-t border-[#1e1e2a] mt-4">
             <Button
-              onClick={handleSaveEdit}
+              onClick={handleSaveEditComplete}
               disabled={saving}
-              className="w-full h-12 bg-amber-500 hover:bg-amber-600 text-black font-semibold"
+              className="w-full h-11 bg-amber-500 hover:bg-amber-600 text-black font-semibold"
             >
-              {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              {saving ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Check className="w-4 h-4 mr-2" />
+              )}
               Guardar cambios
             </Button>
           </SheetFooter>

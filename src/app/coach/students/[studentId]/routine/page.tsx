@@ -504,7 +504,9 @@ export default function StudentRoutinePage() {
                               </div>
                             ) : (
                               <div className="divide-y divide-border">
-                                {macro.mesocycles?.map((meso) => {
+                                {/* Mesociclos V1 ocultos - ahora solo mostramos rutinas V2 */}
+                                {/* Si hay rutinas V2 asociadas, ocultamos los mesociclos V1 */}
+                                {macroRoutinesV2.length === 0 && macro.mesocycles?.map((meso) => {
                                   const isMesoExpanded = expandedMeso === meso.id;
 
                                   return (

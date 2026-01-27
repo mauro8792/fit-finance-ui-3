@@ -107,7 +107,7 @@ export const createFoodItem = async (
     fatPer100g: number;
     fiberPer100g?: number;
     sugarPer100g?: number;
-    sodiumPer100mg?: number;
+    sodiumPer100g?: number;
     barcode?: string;
   }
 ) => {
@@ -170,6 +170,8 @@ export interface FoodItem {
   carbsPer100g: number;
   proteinPer100g: number;
   fatPer100g: number;
+  fiberPer100g?: number;
+  sodiumPer100g?: number;
   caloriesPer100g: number;
   portionGrams: number;
 }
@@ -198,6 +200,8 @@ export const createCoachFoodItem = async (food: {
   carbsPer100g: number;
   proteinPer100g: number;
   fatPer100g: number;
+  fiberPer100g?: number;
+  sodiumPer100g?: number;
   portionGrams: number;
 }): Promise<FoodItem> => {
   const { data } = await api.post("/nutrition/coach/foods", food);
@@ -212,6 +216,8 @@ export const updateCoachFoodItem = async (
     carbsPer100g: number;
     proteinPer100g: number;
     fatPer100g: number;
+    fiberPer100g?: number;
+    sodiumPer100g?: number;
     portionGrams: number;
   }
 ): Promise<FoodItem> => {
@@ -225,6 +231,34 @@ export const deleteCoachFoodItem = async (foodId: number): Promise<void> => {
 
 export const initializeCoachCatalog = async (): Promise<{ created: number; message: string }> => {
   const { data } = await api.post("/nutrition/coach/foods/initialize");
+  return data;
+};
+
+// Alimentos personalizados de alumnos (para el coach)
+export interface StudentCustomFood extends FoodItem {
+  studentId: number;
+  createdById: number;
+  createdAt: string;
+}
+
+export interface StudentFoodsGroup {
+  studentId: number;
+  studentName: string;
+  foods: StudentCustomFood[];
+}
+
+export interface StudentCustomFoodsResponse {
+  foods: StudentCustomFood[];
+  byStudent: StudentFoodsGroup[];
+}
+
+export const getStudentCustomFoods = async (): Promise<StudentCustomFoodsResponse> => {
+  const { data } = await api.get("/nutrition/coach/student-foods");
+  return data;
+};
+
+export const getStudentFoodById = async (foodId: number): Promise<StudentCustomFood & { studentName: string }> => {
+  const { data } = await api.get(`/nutrition/coach/student-foods/${foodId}`);
   return data;
 };
 

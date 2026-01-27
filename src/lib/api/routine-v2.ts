@@ -253,6 +253,7 @@ export interface AddExerciseWithSetsDto {
   targetRir?: number;
   targetRpe?: number;
   coachNotes?: string;
+  linkWithNext?: boolean;
   sets: {
     targetReps?: string;
     targetLoad?: number;
@@ -277,6 +278,7 @@ export interface UpdateStudentExerciseDto {
   targetRpe?: number;
   coachNotes?: string;
   notes?: string;
+  linkWithNext?: boolean;
 }
 
 export const updateStudentExercise = async (exerciseId: string, dto: UpdateStudentExerciseDto): Promise<StudentExercise> => {
@@ -319,16 +321,7 @@ export const updateStudentSet = async (setId: string, dto: Partial<AddSetDto>): 
  */
 export const updateStudentSetsBatch = async (
   exerciseId: string,
-  sets: Array<{
-    id: string;
-    targetReps?: string;
-    targetLoad?: number;
-    targetRir?: number;
-    targetRpe?: number;
-    isAmrap?: boolean;
-    isDropSet?: boolean;
-    dropSetCount?: number;
-  }>
+  sets: Array<{ id: string } & Partial<AddSetDto>>
 ): Promise<StudentSet[]> => {
   const { data } = await api.patch(`${STUDENT_BASE_URL}/exercises/${exerciseId}/sets/batch`, { sets });
   return data;

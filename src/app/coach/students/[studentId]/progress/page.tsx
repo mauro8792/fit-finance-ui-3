@@ -28,6 +28,8 @@ import {
   Check,
   X,
   Settings,
+  Ruler,
+  Camera,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn, formatDate, parseLocalDate } from "@/lib/utils";
@@ -782,6 +784,33 @@ export default function StudentProgressPage() {
             <WeeklyCorrelationDashboard studentId={studentId} />
           </TabsContent>
         </Tabs>
+
+        {/* Módulo de Antropometría */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-6"
+        >
+          <Card
+            className="bg-gradient-to-r from-accent/20 to-primary/10 border-accent/30 cursor-pointer hover:border-accent/50 transition-all"
+            onClick={() => router.push(`/coach/students/${studentId}/progress/measurements`)}
+          >
+            <CardContent className="p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-accent/20 flex items-center justify-center">
+                  <Camera className="w-6 h-6 text-accent" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-text">Antropometría</h3>
+                  <p className="text-xs text-text-muted">
+                    Historial de mediciones y fotos de progreso
+                  </p>
+                </div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-accent" />
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
     </div>
   );

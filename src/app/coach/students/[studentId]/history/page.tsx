@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { getMacrocyclesByStudent, getMicrocyclesByMesocycle } from "@/lib/api/routine";
@@ -33,6 +33,11 @@ import {
   Activity,
   Layers,
   FolderOpen,
+  Flame,
+  ArrowDownToLine,
+  Timer,
+  Repeat,
+  Lock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -76,7 +81,25 @@ interface SetData {
   load?: number;
   reps?: number;
   actualRir?: number;
+  actualRpe?: number;
   status: string;
+  // HIT techniques
+  isAmrap?: boolean;
+  isDropSet?: boolean;
+  dropSetCount?: number;
+  dropSetData?: { reps?: number | string; load?: number }[];
+  isRestPause?: boolean;
+  restPauseSets?: number;
+  restPauseRest?: string;
+  restPauseData?: { reps?: string }[];
+  isMyoReps?: boolean;
+  myoActivationReps?: string;
+  myoMiniSets?: number;
+  myoMiniReps?: string;
+  myoMiniSetsData?: { reps?: string }[];
+  isIsohold?: boolean;
+  isoholdSeconds?: string;
+  isoholdPosition?: string;
 }
 
 interface ExerciseSession {
@@ -158,7 +181,25 @@ export default function CoachStudentHistoryPage() {
                   load: s.load || 0,
                   reps: typeof s.reps === 'string' ? parseInt(s.reps) || 0 : s.reps || 0,
                   actualRir: s.actualRir ?? null,
+                  actualRpe: s.actualRpe ?? null,
                   status: 'completed',
+                  // HIT techniques
+                  isAmrap: s.isAmrap || false,
+                  isDropSet: s.isDropSet || false,
+                  dropSetCount: s.dropSetCount || 0,
+                  dropSetData: s.dropSetData || null,
+                  isRestPause: s.isRestPause || false,
+                  restPauseSets: s.restPauseSets || null,
+                  restPauseRest: s.restPauseRest || null,
+                  restPauseData: s.restPauseData || null,
+                  isMyoReps: s.isMyoReps || false,
+                  myoActivationReps: s.myoActivationReps || null,
+                  myoMiniSets: s.myoMiniSets || null,
+                  myoMiniReps: s.myoMiniReps || null,
+                  myoMiniSetsData: s.myoMiniSetsData || null,
+                  isIsohold: s.isIsohold || false,
+                  isoholdSeconds: s.isoholdSeconds || null,
+                  isoholdPosition: s.isoholdPosition || null,
                 })),
               })),
               macrocycleName: "Rutina V2",
@@ -1159,33 +1200,145 @@ export default function CoachStudentHistoryPage() {
                         </thead>
                         <tbody>
                           {exercise.sets.map((set, setIndex) => (
-                            <tr
-                              key={setIndex}
-                              className="border-b border-border/30"
-                            >
-                              <td className="py-1.5 px-2 text-text-muted">
-                                {setIndex + 1}
-                              </td>
-                              <td className={cn(
-                                "py-1.5 px-2 text-center font-medium",
-                                set.load === maxLoad ? "text-primary" : "text-text"
-                              )}>
-                                {set.load || 0} kg
-                              </td>
-                              <td className="py-1.5 px-2 text-center text-text">
-                                {set.reps || 0}
-                              </td>
-                              <td className="py-1.5 px-2 text-center text-text-muted">
-                                {set.actualRir ?? "-"}
-                              </td>
-                              <td className="py-1.5 px-2 text-right">
-                                {set.status === "completed" ? (
-                                  <CheckCircle2 className="w-4 h-4 text-success inline" />
-                                ) : (
-                                  <Clock className="w-4 h-4 text-warning inline" />
+                            <React.Fragment key={`set-${setIndex}`}>
+                              <tr
+                                className={cn(
+                                  "border-b border-border/30",
+                                  set.isAmrap && "bg-purple-500/10",
+                                  set.isDropSet && "bg-orange-500/10",
+                                  set.isRestPause && "bg-blue-500/10",
+                                  set.isMyoReps && "bg-green-500/10",
+                                  set.isIsohold && "bg-cyan-500/10"
                                 )}
-                              </td>
-                            </tr>
+                              >
+                                <td className="py-1.5 px-2 text-text-muted">
+                                  <div className="flex items-center gap-1">
+                                    {setIndex + 1}
+                                    {set.isAmrap && (
+                                      <Badge className="bg-purple-600/80 text-white text-[8px] px-1 py-0">
+                                        <Flame className="w-2.5 h-2.5" />
+                                      </Badge>
+                                    )}
+                                    {set.isDropSet && (
+                                      <Badge className="bg-orange-600/80 text-white text-[8px] px-1 py-0">
+                                        <ArrowDownToLine className="w-2.5 h-2.5" />
+                                      </Badge>
+                                    )}
+                                    {set.isRestPause && (
+                                      <Badge className="bg-blue-600/80 text-white text-[8px] px-1 py-0">
+                                        <Timer className="w-2.5 h-2.5" />
+                                      </Badge>
+                                    )}
+                                    {set.isMyoReps && (
+                                      <Badge className="bg-green-600/80 text-white text-[8px] px-1 py-0">
+                                        <Repeat className="w-2.5 h-2.5" />
+                                      </Badge>
+                                    )}
+                                    {set.isIsohold && (
+                                      <Badge className="bg-cyan-600/80 text-white text-[8px] px-1 py-0">
+                                        <Lock className="w-2.5 h-2.5" />
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className={cn(
+                                  "py-1.5 px-2 text-center font-medium",
+                                  set.load === maxLoad ? "text-primary" : "text-text"
+                                )}>
+                                  {set.load || 0} kg
+                                </td>
+                                <td className="py-1.5 px-2 text-center text-text">
+                                  {set.reps || 0}
+                                </td>
+                                <td className="py-1.5 px-2 text-center text-text-muted">
+                                  {set.actualRir ?? "-"}
+                                </td>
+                                <td className="py-1.5 px-2 text-right">
+                                  {set.status === "completed" ? (
+                                    <CheckCircle2 className="w-4 h-4 text-success inline" />
+                                  ) : (
+                                    <Clock className="w-4 h-4 text-warning inline" />
+                                  )}
+                                </td>
+                              </tr>
+                              
+                              {/* Drop Set mini-series as rows */}
+                              {set.isDropSet && set.dropSetData && set.dropSetData.length > 0 && 
+                                set.dropSetData.map((drop, i) => (
+                                  <tr key={`drop-${setIndex}-${i}`} className="bg-orange-500/10 border-b border-orange-500/20">
+                                    <td className="py-1 px-2 text-[10px] text-orange-400 pl-6">
+                                      ↳ D{i + 1}
+                                    </td>
+                                    <td className="py-1 px-2 text-center text-[11px] font-medium text-orange-300">
+                                      {drop.load || "—"} kg
+                                    </td>
+                                    <td className="py-1 px-2 text-center text-[11px] font-medium text-orange-300">
+                                      {drop.reps || "—"}
+                                    </td>
+                                    <td className="py-1 px-2 text-center text-[10px] text-text-muted">—</td>
+                                    <td className="py-1 px-2"></td>
+                                  </tr>
+                                ))
+                              }
+                              
+                              {/* Myo Reps mini-series as rows */}
+                              {set.isMyoReps && (() => {
+                                const miniSetsCount = set.myoMiniSets || set.myoMiniSetsData?.length || 0;
+                                if (miniSetsCount === 0) return null;
+                                return Array.from({ length: miniSetsCount }, (_, i) => {
+                                  const miniData = set.myoMiniSetsData?.[i];
+                                  return (
+                                    <tr key={`myo-${setIndex}-${i}`} className="bg-green-500/10 border-b border-green-500/20">
+                                      <td className="py-1 px-2 text-[10px] text-green-400 pl-6">
+                                        ↳ M{i + 1}
+                                      </td>
+                                      <td className="py-1 px-2 text-center text-[11px] text-text-muted">—</td>
+                                      <td className="py-1 px-2 text-center text-[11px] font-medium text-green-300">
+                                        {miniData?.reps || "—"}
+                                      </td>
+                                      <td className="py-1 px-2 text-center text-[10px] text-text-muted">—</td>
+                                      <td className="py-1 px-2"></td>
+                                    </tr>
+                                  );
+                                });
+                              })()}
+                              
+                              {/* Rest-Pause mini-series as rows */}
+                              {set.isRestPause && (() => {
+                                const rpSetsCount = set.restPauseSets || set.restPauseData?.length || 0;
+                                if (rpSetsCount === 0) return null;
+                                return Array.from({ length: rpSetsCount }, (_, i) => {
+                                  const rpData = set.restPauseData?.[i];
+                                  return (
+                                    <tr key={`rp-${setIndex}-${i}`} className="bg-blue-500/10 border-b border-blue-500/20">
+                                      <td className="py-1 px-2 text-[10px] text-blue-400 pl-6">
+                                        ↳ RP{i + 1}
+                                      </td>
+                                      <td className="py-1 px-2 text-center text-[11px] text-text-muted">—</td>
+                                      <td className="py-1 px-2 text-center text-[11px] font-medium text-blue-300">
+                                        {rpData?.reps || "—"}
+                                      </td>
+                                      <td className="py-1 px-2 text-center text-[10px] text-text-muted">—</td>
+                                      <td className="py-1 px-2"></td>
+                                    </tr>
+                                  );
+                                });
+                              })()}
+                              
+                              {/* Isohold details */}
+                              {set.isIsohold && (
+                                <tr key={`iso-${setIndex}`} className="bg-cyan-500/5">
+                                  <td colSpan={5} className="py-1.5 px-2">
+                                    <div className="text-[10px]">
+                                      <span className="text-cyan-400 font-medium">Isohold:</span>
+                                      <span className="text-text-muted ml-2">
+                                        {set.isoholdSeconds}s en {set.isoholdPosition}
+                                      </span>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
                           ))}
                         </tbody>
                       </table>

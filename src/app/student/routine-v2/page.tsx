@@ -22,6 +22,9 @@ import {
   Lock,
   Loader2,
   AlertCircle,
+  Timer,
+  Repeat,
+  Link2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -74,7 +77,7 @@ export default function StudentRoutineV2Page() {
     exerciseId: string,
     setId: string,
     field: keyof StudentSet,
-    value: string | number | boolean
+    value: string | number | boolean | unknown[]
   ) => {
     setExercises((prev) =>
       prev.map((e) =>
@@ -84,6 +87,38 @@ export default function StudentRoutineV2Page() {
               sets: e.sets.map((s) =>
                 s.id === setId ? { ...s, [field]: value } : s
               ),
+            }
+          : e
+      )
+    );
+  };
+
+  // Update mini-set for Rest-Pause or Myo Reps
+  const updateMiniSetLocally = (
+    exerciseId: string,
+    setId: string,
+    type: 'restPause' | 'myoReps',
+    index: number,
+    value: string
+  ) => {
+    setExercises((prev) =>
+      prev.map((e) =>
+        e.id === exerciseId
+          ? {
+              ...e,
+              sets: e.sets.map((s) => {
+                if (s.id !== setId) return s;
+                
+                if (type === 'restPause') {
+                  const newData = [...(s.restPauseData || [])];
+                  newData[index] = { actualReps: value };
+                  return { ...s, restPauseData: newData };
+                } else {
+                  const newData = [...(s.myoMiniSetsData || [])];
+                  newData[index] = { actualReps: value };
+                  return { ...s, myoMiniSetsData: newData };
+                }
+              }),
             }
           : e
       )
@@ -273,14 +308,16 @@ export default function StudentRoutineV2Page() {
         )}
 
         {/* Lista de ejercicios */}
-        {exercises.map((exercise) => (
+        {exercises.map((exercise, exIdx) => (
           <ExerciseCard
             key={exercise.id}
             exercise={exercise}
             isPreview={isPreview}
             saving={saving}
+            isLinkedWithPrevious={exIdx > 0 && exercises[exIdx - 1]?.linkWithNext}
             onToggleExpand={() => toggleExpand(exercise.id)}
             onUpdateSet={(setId, field, value) => updateSetLocally(exercise.id, setId, field, value)}
+            onUpdateMiniSet={(setId, type, index, value) => updateMiniSetLocally(exercise.id, setId, type, index, value)}
             onLogSet={(setId) => handleLogSet(setId, exercise.id)}
           />
         ))}
@@ -310,22 +347,38 @@ function ExerciseCard({
   exercise,
   isPreview,
   saving,
+  isLinkedWithPrevious,
   onToggleExpand,
   onUpdateSet,
+  onUpdateMiniSet,
   onLogSet,
 }: {
   exercise: LocalExercise;
   isPreview: boolean;
   saving: boolean;
+  isLinkedWithPrevious?: boolean;
   onToggleExpand: () => void;
-  onUpdateSet: (setId: string, field: keyof StudentSet, value: string | number | boolean) => void;
+  onUpdateSet: (setId: string, field: keyof StudentSet, value: string | number | boolean | unknown[]) => void;
+  onUpdateMiniSet: (setId: string, type: 'restPause' | 'myoReps', index: number, value: string) => void;
   onLogSet: (setId: string) => void;
 }) {
   const exerciseName = exercise.exerciseCatalog?.name || `Ejercicio ${exercise.exerciseCatalogId}`;
   const muscleGroup = exercise.exerciseCatalog?.muscleGroup;
+  const isSuperset = exercise.linkWithNext || isLinkedWithPrevious;
 
   return (
-    <Card className="bg-surface/80 border-border overflow-hidden">
+    <Card className={cn(
+      "bg-surface/80 border-border overflow-hidden",
+      isSuperset && "border-l-2 border-l-blue-500"
+    )}>
+      {/* Superset indicator */}
+      {isLinkedWithPrevious && (
+        <div className="px-4 py-1 bg-blue-500/10 flex items-center gap-2">
+          <Link2 className="w-3 h-3 text-blue-400" />
+          <span className="text-[10px] text-blue-400 font-medium">SUPERSERIE</span>
+        </div>
+      )}
+
       {/* Header */}
       <div
         className="p-4 flex items-center justify-between cursor-pointer"
@@ -337,6 +390,9 @@ function ExerciseCard({
             <h3 className="font-semibold text-text">{exerciseName}</h3>
             <p className="text-xs text-text-muted">
               {muscleGroup} · {exercise.sets.length} series
+              {exercise.linkWithNext && (
+                <span className="text-blue-400 ml-1">· Continúa abajo ↓</span>
+              )}
             </p>
           </div>
         </div>
@@ -346,6 +402,16 @@ function ExerciseCard({
           <ChevronDown className="w-5 h-5 text-text-muted" />
         )}
       </div>
+
+      {/* Coach Notes */}
+      {exercise.expanded && exercise.coachNotes && (
+        <div className="px-4 pb-2">
+          <div className="flex items-start gap-2 p-2 bg-amber-500/10 rounded-lg">
+            <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-300">{exercise.coachNotes}</p>
+          </div>
+        </div>
+      )}
 
       {/* Notes */}
       {exercise.expanded && exercise.notes && (
@@ -362,7 +428,7 @@ function ExerciseCard({
         <div className="px-4 pb-4">
           {/* Header */}
           <div className="grid grid-cols-6 gap-1 text-[10px] font-medium text-primary bg-primary/10 rounded-t-lg p-2">
-            <span className="text-center">OBJETIVO</span>
+            <span className="text-center">TÉCNICA</span>
             <span className="text-center">REPS</span>
             <span className="text-center">CARGA</span>
             <span className="text-center">RIR</span>
@@ -378,6 +444,7 @@ function ExerciseCard({
               isPreview={isPreview}
               saving={saving}
               onUpdate={(field, value) => onUpdateSet(set.id, field, value)}
+              onUpdateMiniSet={(type, index, value) => onUpdateMiniSet(set.id, type, index, value)}
               onLog={() => onLogSet(set.id)}
             />
           ))}
@@ -395,6 +462,7 @@ function SetRow({
   saving,
   onUpdate,
   onLog,
+  onUpdateMiniSet,
 }: {
   set: StudentSet;
   setNumber: number;
@@ -402,105 +470,232 @@ function SetRow({
   saving: boolean;
   onUpdate: (field: keyof StudentSet, value: string | number | boolean) => void;
   onLog: () => void;
+  onUpdateMiniSet?: (type: 'restPause' | 'myoReps', index: number, value: string) => void;
 }) {
   const isAmrap = set.isAmrap || set.targetReps === 'AMRAP';
   const isDropSet = set.isDropSet;
+  const isRestPause = set.isRestPause;
+  const isMyoReps = set.isMyoReps;
+  const isIsohold = set.isIsohold;
+
+  // Determine background color based on technique
+  const getBgClass = () => {
+    if (set.isCompleted) return "bg-accent/10";
+    if (isAmrap) return "bg-purple-500/5";
+    if (isDropSet) return "bg-orange-500/5";
+    if (isRestPause) return "bg-cyan-500/5";
+    if (isMyoReps) return "bg-pink-500/5";
+    if (isIsohold) return "bg-emerald-500/5";
+    return "";
+  };
 
   return (
-    <div
-      className={cn(
-        "grid grid-cols-6 gap-1 p-2 border-b border-border items-center",
-        set.isCompleted && "bg-accent/10",
-        isAmrap && "bg-purple-500/5",
-        isDropSet && "bg-orange-500/5"
+    <div className="border-b border-border">
+      {/* Main row */}
+      <div
+        className={cn(
+          "grid grid-cols-6 gap-1 p-2 items-center",
+          getBgClass()
+        )}
+      >
+        {/* Objetivo / Técnica */}
+        <div className="text-center">
+          {isAmrap ? (
+            <Badge className="bg-purple-500 text-white text-[10px] px-1">
+              <Flame className="w-3 h-3 mr-0.5" />
+              MAX
+            </Badge>
+          ) : isRestPause ? (
+            <Badge className="bg-cyan-500 text-white text-[10px] px-1">
+              <Timer className="w-3 h-3 mr-0.5" />
+              R-P
+            </Badge>
+          ) : isMyoReps ? (
+            <Badge className="bg-pink-500 text-white text-[10px] px-1">
+              <Repeat className="w-3 h-3 mr-0.5" />
+              MYO
+            </Badge>
+          ) : isIsohold ? (
+            <Badge className="bg-emerald-500 text-white text-[10px] px-1">
+              <Lock className="w-3 h-3 mr-0.5" />
+              ISO
+            </Badge>
+          ) : (
+            <span className="text-sm font-medium">{set.targetReps}</span>
+          )}
+          {isDropSet && (
+            <Badge className="bg-orange-500 text-white text-[8px] px-1 ml-1">
+              <ArrowDownToLine className="w-2 h-2" />
+            </Badge>
+          )}
+        </div>
+
+        {/* REPS Real */}
+        <Input
+          type="text"
+          inputMode="numeric"
+          value={set.actualReps || ""}
+          onChange={(e) => onUpdate("actualReps", e.target.value)}
+          className={cn(
+            "h-8 text-center text-sm p-1",
+            set.isCompleted && "text-accent font-medium",
+            isPreview && "opacity-50"
+          )}
+          disabled={isPreview || set.isCompleted}
+          placeholder={isMyoReps ? set.myoActivationReps || "-" : "-"}
+        />
+
+        {/* CARGA */}
+        <Input
+          type="text"
+          inputMode="decimal"
+          value={set.actualLoad || ""}
+          onChange={(e) => onUpdate("actualLoad", e.target.value)}
+          className={cn(
+            "h-8 text-center text-sm p-1",
+            set.isCompleted && "text-accent font-medium",
+            isPreview && "opacity-50"
+          )}
+          disabled={isPreview || set.isCompleted}
+          placeholder={set.targetLoad?.toString() || "-"}
+        />
+
+        {/* RIR */}
+        <Input
+          type="text"
+          inputMode="numeric"
+          value={set.actualRir || ""}
+          onChange={(e) => onUpdate("actualRir", e.target.value)}
+          className={cn(
+            "h-8 text-center text-sm p-1",
+            set.isCompleted && "text-accent font-medium",
+            isPreview && "opacity-50"
+          )}
+          disabled={isPreview || set.isCompleted}
+          placeholder={set.targetRir?.toString() || "-"}
+        />
+
+        {/* Action */}
+        <div className="col-span-2 flex justify-center">
+          {set.isCompleted ? (
+            <Badge variant="outline" className="border-accent text-accent text-[10px]">
+              <Check className="w-3 h-3 mr-1" /> Hecho
+            </Badge>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              onClick={onLog}
+              disabled={isPreview || saving}
+            >
+              {saving ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <>
+                  <Check className="w-3 h-3 mr-1" /> Log
+                </>
+              )}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Rest-Pause mini-sets */}
+      {isRestPause && set.restPauseSets && (
+        <div className="px-2 pb-2 bg-cyan-500/5">
+          <p className="text-[10px] text-cyan-400 mb-1">
+            Mini-sets ({set.restPauseSets}x) - Descanso: {set.restPauseRest || "10-15"}s
+          </p>
+          <div className="flex gap-1">
+            {Array.from({ length: set.restPauseSets }, (_, i) => (
+              <Input
+                key={i}
+                type="text"
+                inputMode="numeric"
+                value={set.restPauseData?.[i]?.actualReps || ""}
+                onChange={(e) => onUpdateMiniSet?.('restPause', i, e.target.value)}
+                className="h-7 w-12 text-center text-xs p-1 bg-cyan-950/30 border-cyan-500/30"
+                disabled={isPreview || set.isCompleted}
+                placeholder={`#${i + 1}`}
+              />
+            ))}
+          </div>
+        </div>
       )}
-    >
-      {/* Objetivo */}
-      <div className="text-center">
-        {isAmrap ? (
-          <Badge className="bg-purple-500 text-white text-[10px] px-1">
-            <Flame className="w-3 h-3 mr-0.5" />
-            MAX
-          </Badge>
-        ) : (
-          <span className="text-sm font-medium">{set.targetReps}</span>
-        )}
-        {isDropSet && (
-          <Badge className="bg-orange-500 text-white text-[8px] px-1 ml-1">
-            <ArrowDownToLine className="w-2 h-2" />
-          </Badge>
-        )}
-      </div>
 
-      {/* REPS Real */}
-      <Input
-        type="text"
-        inputMode="numeric"
-        value={set.actualReps || ""}
-        onChange={(e) => onUpdate("actualReps", e.target.value)}
-        className={cn(
-          "h-8 text-center text-sm p-1",
-          set.isCompleted && "text-accent font-medium",
-          isPreview && "opacity-50"
-        )}
-        disabled={isPreview || set.isCompleted}
-        placeholder="-"
-      />
+      {/* Myo Reps mini-sets */}
+      {isMyoReps && set.myoMiniSets && (
+        <div className="px-2 pb-2 bg-pink-500/5">
+          <p className="text-[10px] text-pink-400 mb-1">
+            Activación: {set.myoActivationReps} + {set.myoMiniSets} mini-sets de {set.myoMiniReps}
+          </p>
+          <div className="flex gap-1">
+            {Array.from({ length: set.myoMiniSets }, (_, i) => (
+              <Input
+                key={i}
+                type="text"
+                inputMode="numeric"
+                value={set.myoMiniSetsData?.[i]?.actualReps || ""}
+                onChange={(e) => onUpdateMiniSet?.('myoReps', i, e.target.value)}
+                className="h-7 w-12 text-center text-xs p-1 bg-pink-950/30 border-pink-500/30"
+                disabled={isPreview || set.isCompleted}
+                placeholder={`#${i + 1}`}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
-      {/* CARGA */}
-      <Input
-        type="text"
-        inputMode="decimal"
-        value={set.actualLoad || ""}
-        onChange={(e) => onUpdate("actualLoad", e.target.value)}
-        className={cn(
-          "h-8 text-center text-sm p-1",
-          set.isCompleted && "text-accent font-medium",
-          isPreview && "opacity-50"
-        )}
-        disabled={isPreview || set.isCompleted}
-        placeholder={set.targetLoad?.toString() || "-"}
-      />
+      {/* Isohold info */}
+      {isIsohold && (
+        <div className="px-2 pb-2 bg-emerald-500/5">
+          <p className="text-[10px] text-emerald-400">
+            Mantener {set.isoholdSeconds}s en posición {set.isoholdPosition} + completar reps
+          </p>
+        </div>
+      )}
 
-      {/* RIR */}
-      <Input
-        type="text"
-        inputMode="numeric"
-        value={set.actualRir || ""}
-        onChange={(e) => onUpdate("actualRir", e.target.value)}
-        className={cn(
-          "h-8 text-center text-sm p-1",
-          set.isCompleted && "text-accent font-medium",
-          isPreview && "opacity-50"
-        )}
-        disabled={isPreview || set.isCompleted}
-        placeholder={set.targetRir?.toString() || "-"}
-      />
-
-      {/* Action */}
-      <div className="col-span-2 flex justify-center">
-        {set.isCompleted ? (
-          <Badge variant="outline" className="border-accent text-accent text-[10px]">
-            <Check className="w-3 h-3 mr-1" /> Hecho
-          </Badge>
-        ) : (
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 text-xs"
-            onClick={onLog}
-            disabled={isPreview || saving}
-          >
-            {saving ? (
-              <Loader2 className="w-3 h-3 animate-spin" />
-            ) : (
-              <>
-                <Check className="w-3 h-3 mr-1" /> Log
-              </>
-            )}
-          </Button>
-        )}
-      </div>
+      {/* Drop set rows */}
+      {isDropSet && set.dropSetCount && (
+        <div className="bg-orange-500/5">
+          {Array.from({ length: set.dropSetCount }, (_, i) => (
+            <div
+              key={i}
+              className="grid grid-cols-6 gap-1 px-2 py-1 items-center border-l-2 border-l-orange-500/50"
+            >
+              <span className="text-[10px] text-orange-400 text-center">↳ Drop {i + 1}</span>
+              <Input
+                type="text"
+                inputMode="numeric"
+                value={set.dropSetData?.[i]?.reps || ""}
+                onChange={(e) => {
+                  const newData = [...(set.dropSetData || [])];
+                  newData[i] = { ...newData[i], reps: e.target.value };
+                  onUpdate("dropSetData" as keyof StudentSet, newData as unknown as string);
+                }}
+                className="h-7 text-center text-xs p-1 bg-orange-950/30 border-orange-500/30"
+                disabled={isPreview || set.isCompleted}
+                placeholder="reps"
+              />
+              <Input
+                type="text"
+                inputMode="decimal"
+                value={set.dropSetData?.[i]?.load || ""}
+                onChange={(e) => {
+                  const newData = [...(set.dropSetData || [])];
+                  newData[i] = { ...newData[i], load: parseFloat(e.target.value) || undefined };
+                  onUpdate("dropSetData" as keyof StudentSet, newData as unknown as string);
+                }}
+                className="h-7 text-center text-xs p-1 bg-orange-950/30 border-orange-500/30"
+                disabled={isPreview || set.isCompleted}
+                placeholder={set.dropSetTargets?.[i]?.targetLoad?.toString() || "kg"}
+              />
+              <span className="col-span-3" />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

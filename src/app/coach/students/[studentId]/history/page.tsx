@@ -164,25 +164,6 @@ export default function CoachStudentHistoryPage() {
         try {
           const v2History = await getStudentWorkoutHistory(studentId);
           console.log("📦 Historial V2:", v2History.length, "entrenamientos");
-          
-          // DEBUG: Ver los sets con técnicas HIT
-          for (const item of v2History) {
-            for (const ex of item.exercises || []) {
-              for (const s of ex.sets || []) {
-                if (s.isMyoReps || s.isRestPause) {
-                  console.log("🔥 Set con HIT:", {
-                    exercise: ex.name,
-                    isMyoReps: s.isMyoReps,
-                    myoMiniSets: s.myoMiniSets,
-                    myoMiniSetsData: s.myoMiniSetsData,
-                    isRestPause: s.isRestPause,
-                    restPauseSets: s.restPauseSets,
-                    restPauseData: s.restPauseData,
-                  });
-                }
-              }
-            }
-          }
 
           // Convertir V2 al formato TrainingDay (ahora incluye datos reales de sets)
           for (const item of v2History) {
@@ -1218,21 +1199,7 @@ export default function CoachStudentHistoryPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {exercise.sets.map((set, setIndex) => {
-                            // DEBUG: Log sets with HIT in render
-                            if (set.isMyoReps || set.isRestPause) {
-                              console.log("🎯 RENDER Set HIT:", {
-                                exercise: exercise.exerciseCatalog?.name,
-                                setIndex,
-                                isMyoReps: set.isMyoReps,
-                                myoMiniSets: set.myoMiniSets,
-                                myoMiniSetsData: set.myoMiniSetsData,
-                                isRestPause: set.isRestPause,
-                                restPauseSets: set.restPauseSets,
-                                restPauseData: set.restPauseData,
-                              });
-                            }
-                            return (
+                          {exercise.sets.map((set, setIndex) => (
                             <React.Fragment key={`set-${setIndex}`}>
                               <tr
                                 className={cn(
@@ -1372,8 +1339,7 @@ export default function CoachStudentHistoryPage() {
                                 </tr>
                               )}
                             </React.Fragment>
-                          );
-                          })}
+                          ))}
                         </tbody>
                       </table>
                     </div>

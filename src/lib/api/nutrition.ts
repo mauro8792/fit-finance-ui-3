@@ -234,3 +234,31 @@ export const initializeCoachCatalog = async (): Promise<{ created: number; messa
   return data;
 };
 
+// Alimentos personalizados de alumnos (para el coach)
+export interface StudentCustomFood extends FoodItem {
+  studentId: number;
+  createdById: number;
+  createdAt: string;
+}
+
+export interface StudentFoodsGroup {
+  studentId: number;
+  studentName: string;
+  foods: StudentCustomFood[];
+}
+
+export interface StudentCustomFoodsResponse {
+  foods: StudentCustomFood[];
+  byStudent: StudentFoodsGroup[];
+}
+
+export const getStudentCustomFoods = async (): Promise<StudentCustomFoodsResponse> => {
+  const { data } = await api.get("/nutrition/coach/student-foods");
+  return data;
+};
+
+export const getStudentFoodById = async (foodId: number): Promise<StudentCustomFood & { studentName: string }> => {
+  const { data } = await api.get(`/nutrition/coach/student-foods/${foodId}`);
+  return data;
+};
+

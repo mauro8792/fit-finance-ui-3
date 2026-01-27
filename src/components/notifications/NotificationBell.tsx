@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -20,6 +21,7 @@ import {
   CreditCard,
   AlertTriangle,
   AlertCircle,
+  Apple,
 } from "lucide-react";
 import {
   getNotifications,
@@ -50,8 +52,33 @@ const getNotificationIcon = (type: string) => {
       return <AlertCircle className="w-5 h-5 text-red-500" />;
     case "fee_paid":
       return <CheckCheck className="w-5 h-5 text-success" />;
+    case "student_food_created":
+      return <Apple className="w-5 h-5 text-green-400" />;
     default:
       return <Info className="w-5 h-5 text-text-muted" />;
+  }
+};
+
+// Obtener URL de navegación según tipo de notificación
+const getNotificationUrl = (notif: Notification): string | null => {
+  switch (notif.type) {
+    case "student_food_created":
+      if (notif.metadata?.foodId) {
+        return `/coach/student-foods?foodId=${notif.metadata.foodId}`;
+      }
+      return "/coach/student-foods";
+    case "new_student":
+      if (notif.metadata?.studentId) {
+        return `/coach/students/${notif.metadata.studentId}`;
+      }
+      return "/coach/students";
+    case "weight_logged":
+      if (notif.metadata?.studentId) {
+        return `/coach/students/${notif.metadata.studentId}/progress`;
+      }
+      return null;
+    default:
+      return null;
   }
 };
 
@@ -72,12 +99,31 @@ const getTimeAgo = (date: string) => {
 };
 
 export function NotificationBell() {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+
+  // Manejar click en notificación con navegación
+  const handleNotificationClick = async (notif: Notification) => {
+    // Marcar como leída si no lo está
+    if (!notif.isRead) {
+      await handleMarkAsRead(notif.id);
+    }
+
+    // Verificar si tiene URL de navegación
+    const url = getNotificationUrl(notif);
+    if (url) {
+      setOpen(false);
+      router.push(url);
+    } else {
+      // Si no tiene URL, expandir/contraer
+      setExpandedId(expandedId === notif.id ? null : notif.id);
+    }
+  };
 
   // Cargar contador de no leídas
   const loadUnreadCount = useCallback(async () => {
@@ -274,17 +320,11 @@ export function NotificationBell() {
                             key={notif.id}
                             initial={{ opacity: 0, y: -10 }}
                             animate={{ opacity: 1, y: 0 }}
-                            onClick={() => {
-                              if (expandedId === notif.id) {
-                                setExpandedId(null);
-                              } else {
-                                setExpandedId(notif.id);
-                                if (!notif.isRead) {
-                                  handleMarkAsRead(notif.id);
-                                }
-                              }
-                            }}
-                            className="flex items-start gap-3 px-4 py-3 bg-success/10 border-l-4 border-success cursor-pointer hover:bg-success/15 transition-colors"
+                            onClick={() => handleNotificationClick(notif)}
+                            className={cn(
+                              "flex items-start gap-3 px-4 py-3 bg-success/10 border-l-4 border-success cursor-pointer hover:bg-success/15 transition-colors",
+                              getNotificationUrl(notif) && "hover:bg-success/20"
+                            )}
                           >
                             <div className="mt-0.5">
                               {getNotificationIcon(notif.type)}
@@ -329,8 +369,11 @@ export function NotificationBell() {
                         {readNotifications.map((notif) => (
                           <div
                             key={notif.id}
-                            className="flex items-start gap-3 px-4 py-3 opacity-60 hover:opacity-80 transition-opacity cursor-pointer"
-                            onClick={() => setExpandedId(expandedId === notif.id ? null : notif.id)}
+                            className={cn(
+                              "flex items-start gap-3 px-4 py-3 opacity-60 hover:opacity-80 transition-opacity cursor-pointer",
+                              getNotificationUrl(notif) && "hover:opacity-100"
+                            )}
+                            onClick={() => handleNotificationClick(notif)}
                           >
                             <div className="mt-0.5">
                               {getNotificationIcon(notif.type)}

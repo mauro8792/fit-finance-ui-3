@@ -25,8 +25,10 @@ import {
   UtensilsCrossed,
   Target,
   ClipboardList,
+  Apple,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 interface StudentSummary {
   id: number;
@@ -138,8 +140,11 @@ export default function CoachDashboard() {
             <p className="text-text-muted text-sm">{getGreeting()}</p>
             <h1 className="text-2xl font-bold text-text">{firstName} 💪</h1>
           </div>
-          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-primary-hover flex items-center justify-center shadow-lg shadow-primary/20">
-            <Dumbbell className="w-6 h-6 text-black" />
+          <div className="flex items-center gap-2">
+            <NotificationBell />
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-primary-hover flex items-center justify-center shadow-lg shadow-primary/20">
+              <Dumbbell className="w-6 h-6 text-black" />
+            </div>
           </div>
         </motion.div>
       </header>
@@ -287,6 +292,13 @@ export default function CoachDashboard() {
               >
                 <UtensilsCrossed className="w-5 h-5 text-orange-500" />
                 <span className="text-sm font-medium text-text">CATÁLOGO DE ALIMENTOS</span>
+              </div>
+              <div
+                className="p-4 flex items-center gap-3 cursor-pointer touch-feedback"
+                onClick={() => router.push("/coach/student-foods")}
+              >
+                <Apple className="w-5 h-5 text-green-500" />
+                <span className="text-sm font-medium text-text">ALIMENTOS DE ALUMNOS</span>
               </div>
               <div
                 className="p-4 flex items-center gap-3 cursor-pointer touch-feedback"

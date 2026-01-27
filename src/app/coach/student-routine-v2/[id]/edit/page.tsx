@@ -581,8 +581,8 @@ export default function EditStudentRoutinePage() {
       const currentCount = editingExercise.sets?.length || 0;
       
       // Helper function to build set data with HIT technique
-      const buildSetData = (isLast: boolean) => {
-        const setData: Record<string, unknown> = {
+      const buildSetData = (isLast: boolean): Parameters<typeof routineV2Api.addStudentSet>[1] => {
+        const setData: Parameters<typeof routineV2Api.addStudentSet>[1] = {
           targetReps: repsRange,
           targetLoad: kg ? parseFloat(kg) : undefined,
           targetRir: rir ? parseInt(rir) : undefined,

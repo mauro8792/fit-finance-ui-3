@@ -309,7 +309,7 @@ export default function EditRoutineV2Page() {
 
       // 2. Create sets - each with its individual config
       for (const set of editingSets) {
-        const setData: Record<string, unknown> = {
+        const setData: Parameters<typeof routineV2Api.addSet>[1] = {
           targetReps: set.reps,
           targetLoad: set.kg ? parseFloat(set.kg) : undefined,
           targetRir: set.rir ? parseInt(set.rir) : undefined,

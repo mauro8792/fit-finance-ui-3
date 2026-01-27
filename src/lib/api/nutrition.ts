@@ -107,7 +107,7 @@ export const createFoodItem = async (
     fatPer100g: number;
     fiberPer100g?: number;
     sugarPer100g?: number;
-    sodiumPer100mg?: number;
+    sodiumPer100g?: number;
     barcode?: string;
   }
 ) => {

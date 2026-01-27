@@ -170,6 +170,8 @@ export interface FoodItem {
   carbsPer100g: number;
   proteinPer100g: number;
   fatPer100g: number;
+  fiberPer100g?: number;
+  sodiumPer100g?: number;
   caloriesPer100g: number;
   portionGrams: number;
 }
@@ -198,6 +200,8 @@ export const createCoachFoodItem = async (food: {
   carbsPer100g: number;
   proteinPer100g: number;
   fatPer100g: number;
+  fiberPer100g?: number;
+  sodiumPer100g?: number;
   portionGrams: number;
 }): Promise<FoodItem> => {
   const { data } = await api.post("/nutrition/coach/foods", food);
@@ -212,6 +216,8 @@ export const updateCoachFoodItem = async (
     carbsPer100g: number;
     proteinPer100g: number;
     fatPer100g: number;
+    fiberPer100g?: number;
+    sodiumPer100g?: number;
     portionGrams: number;
   }
 ): Promise<FoodItem> => {

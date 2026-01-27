@@ -88,6 +88,8 @@ export default function CoachFoodCatalogPage() {
     carbsPer100g: "",
     proteinPer100g: "",
     fatPer100g: "",
+    fiberPer100g: "",
+    sodiumPer100g: "",
     portionGrams: "100",
   });
 
@@ -132,6 +134,8 @@ export default function CoachFoodCatalogPage() {
         carbsPer100g: String(food.carbsPer100g),
         proteinPer100g: String(food.proteinPer100g),
         fatPer100g: String(food.fatPer100g),
+        fiberPer100g: String(food.fiberPer100g || 0),
+        sodiumPer100g: String(food.sodiumPer100g || 0),
         portionGrams: String(food.portionGrams),
       });
     } else {
@@ -142,6 +146,8 @@ export default function CoachFoodCatalogPage() {
         carbsPer100g: "",
         proteinPer100g: "",
         fatPer100g: "",
+        fiberPer100g: "",
+        sodiumPer100g: "",
         portionGrams: "100",
       });
     }
@@ -167,6 +173,8 @@ export default function CoachFoodCatalogPage() {
         carbsPer100g: parseFloat(formData.carbsPer100g) || 0,
         proteinPer100g: parseFloat(formData.proteinPer100g) || 0,
         fatPer100g: parseFloat(formData.fatPer100g) || 0,
+        fiberPer100g: parseFloat(formData.fiberPer100g) || 0,
+        sodiumPer100g: parseFloat(formData.sodiumPer100g) || 0,
         portionGrams: parseInt(formData.portionGrams) || 100,
       };
 
@@ -518,6 +526,33 @@ export default function CoachFoodCatalogPage() {
                     }
                     placeholder="0"
                     className="mt-1 bg-background border-border text-pink-400"
+                  />
+                </div>
+              </div>
+              {/* Fibra y Sodio */}
+              <div className="grid grid-cols-2 gap-2 mt-3">
+                <div>
+                  <Label className="text-xs text-green-400">Fibra (g)</Label>
+                  <Input
+                    type="number"
+                    value={formData.fiberPer100g}
+                    onChange={(e) =>
+                      setFormData({ ...formData, fiberPer100g: e.target.value })
+                    }
+                    placeholder="0"
+                    className="mt-1 bg-background border-border text-green-400"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-cyan-400">Sodio (mg)</Label>
+                  <Input
+                    type="number"
+                    value={formData.sodiumPer100g}
+                    onChange={(e) =>
+                      setFormData({ ...formData, sodiumPer100g: e.target.value })
+                    }
+                    placeholder="0"
+                    className="mt-1 bg-background border-border text-cyan-400"
                   />
                 </div>
               </div>

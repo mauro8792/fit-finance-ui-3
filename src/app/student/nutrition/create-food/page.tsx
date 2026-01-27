@@ -49,6 +49,8 @@ export default function CreateFoodPage() {
     proteinPer100g: 0,
     carbsPer100g: 0,
     fatPer100g: 0,
+    fiberPer100g: 0,
+    sodiumPer100g: 0,
     portionGrams: 100,
   });
 
@@ -91,6 +93,8 @@ export default function CreateFoodPage() {
         proteinPer100g: formData.proteinPer100g,
         carbsPer100g: formData.carbsPer100g,
         fatPer100g: formData.fatPer100g,
+        fiberPer100g: formData.fiberPer100g,
+        sodiumPer100g: formData.sodiumPer100g,
       });
       
       toast.success("Alimento creado exitosamente");
@@ -206,6 +210,37 @@ export default function CreateFoodPage() {
                     step="0.1"
                     value={formData.fatPer100g || ""}
                     onChange={(e) => handleChange("fatPer100g", parseFloat(e.target.value) || 0)}
+                    placeholder="0"
+                    className="bg-background/50 border-border h-10"
+                  />
+                </div>
+              </div>
+              {/* Fibra y Sodio */}
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                <div className="space-y-1">
+                  <Label htmlFor="fiber" className="text-xs text-green-400">
+                    Fibra (g)
+                  </Label>
+                  <Input
+                    id="fiber"
+                    type="number"
+                    step="0.1"
+                    value={formData.fiberPer100g || ""}
+                    onChange={(e) => handleChange("fiberPer100g", parseFloat(e.target.value) || 0)}
+                    placeholder="0"
+                    className="bg-background/50 border-border h-10"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="sodium" className="text-xs text-cyan-400">
+                    Sodio (mg)
+                  </Label>
+                  <Input
+                    id="sodium"
+                    type="number"
+                    step="1"
+                    value={formData.sodiumPer100g || ""}
+                    onChange={(e) => handleChange("sodiumPer100g", parseFloat(e.target.value) || 0)}
                     placeholder="0"
                     className="bg-background/50 border-border h-10"
                   />

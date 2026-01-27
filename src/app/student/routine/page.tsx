@@ -19,7 +19,7 @@ import {
     Target,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState, useRef } from "react";
 
 export default function RoutinePage() {
   const router = useRouter();
@@ -52,6 +52,39 @@ export default function RoutinePage() {
   
   const currentMicro = microcycles[selectedMicroIndex];
   const routineName = isV2 ? routineV2?.name : activeMeso?.name;
+
+  // Days carousel state
+  const [daysScrollIndex, setDaysScrollIndex] = useState(0);
+  const daysContainerRef = useRef<HTMLDivElement>(null);
+
+  // Get filtered and sorted days for display
+  const displayDays = currentMicro?.days
+    ?.filter((day: any) => !(isV2 ? day.isRestDay : day.esDescanso) && day.exercises && day.exercises.length > 0)
+    .sort((a: any, b: any) => (isV2 ? a.dayNumber : a.dia) - (isV2 ? b.dayNumber : b.dia)) || [];
+
+  const showDaysCarousel = displayDays.length > 3;
+  const maxDaysScroll = Math.max(0, displayDays.length - 3);
+
+  // Calculate muscle group summary for current microcycle
+  const getMicrocycleMuscleGroups = () => {
+    if (!currentMicro?.days) return {};
+    
+    const muscleGroups: Record<string, number> = {};
+    
+    currentMicro.days.forEach((day: any) => {
+      day.exercises?.forEach((exercise: any) => {
+        const group = exercise.exerciseCatalog?.muscleGroup || 
+                     exercise.ejercicioCatalogo?.grupoMuscular || 
+                     "Sin grupo";
+        muscleGroups[group] = (muscleGroups[group] || 0) + 1;
+      });
+    });
+    
+    return muscleGroups;
+  };
+
+  const muscleGroupsSummary = getMicrocycleMuscleGroups();
+  const sortedMuscleGroups = Object.entries(muscleGroupsSummary).sort((a, b) => b[1] - a[1]);
 
   // Update URL when microcycle changes (without causing reload)
   const updateMicroInUrl = (index: number) => {
@@ -232,91 +265,78 @@ export default function RoutinePage() {
           </Button>
         </div>
 
-        {/* Days Grid */}
+        {/* Days Grid/Carousel */}
         <div className="space-y-2">
           <h3 className="text-sm font-medium text-text-muted px-1">
             Días de entrenamiento
           </h3>
           
-          {currentMicro?.days && currentMicro.days.length > 0 ? (
-            <div className="grid grid-cols-3 gap-2">
-              {currentMicro.days
-                .filter((day: any) => !(isV2 ? day.isRestDay : day.esDescanso) && day.exercises && day.exercises.length > 0)
-                .sort((a: any, b: any) => (isV2 ? a.dayNumber : a.dia) - (isV2 ? b.dayNumber : b.dia))
-                .map((day: any) => {
-                  const totalSets = day.exercises?.reduce(
-                    (acc: number, ex: any) => acc + (ex.sets?.length || 0), 0
-                  ) || 0;
-                  const completedSets = day.exercises?.reduce(
-                    (acc: number, ex: any) => acc + (ex.sets?.filter((s: any) => 
-                      isV2 ? (s.isCompleted || s.completedAt) : s.status === "completed"
-                    ).length || 0), 0
-                  ) || 0;
-                  const progress = totalSets > 0 ? (completedSets / totalSets) * 100 : 0;
-                  const isComplete = progress === 100;
-                  const isStarted = completedSets > 0;
+          {displayDays.length > 0 ? (
+            showDaysCarousel ? (
+              /* Carousel para más de 3 días */
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
+                  onClick={() => setDaysScrollIndex(Math.max(0, daysScrollIndex - 1))}
+                  disabled={daysScrollIndex === 0}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
 
-                  return (
-                    <motion.div
-                      key={day.id}
-                      whileTap={{ scale: 0.95 }}
-                    >
-                      <Card
-                        className={cn(
-                          "cursor-pointer border-2 transition-all",
-                          isComplete 
-                            ? "bg-success/10 border-success/50" 
-                            : isStarted 
-                              ? "bg-warning/10 border-warning/50"
-                              : "bg-surface/80 border-border hover:border-primary/50"
-                        )}
-                        onClick={() => router.push(`/student/routine/workout/${day.id}?micro=${selectedMicroIndex}`)}
-                      >
-                        <CardContent className="p-4 text-center">
-                          <div className={cn(
-                            "w-10 h-10 rounded-full mx-auto mb-2 flex items-center justify-center",
-                            isComplete 
-                              ? "bg-success/20" 
-                              : isStarted 
-                                ? "bg-warning/20"
-                                : "bg-primary/20"
-                          )}>
-                            {isComplete ? (
-                              <CheckCircle2 className="w-5 h-5 text-success" />
-                            ) : isStarted ? (
-                              <Play className="w-5 h-5 text-warning" />
-                            ) : (
-                              <Dumbbell className="w-5 h-5 text-primary" />
-                            )}
-                          </div>
-                          <p className="font-bold text-text text-lg">
-                            DÍA {isV2 ? day.dayNumber : day.dia}
-                          </p>
-                          <p className="text-xs text-text-muted">
-                            {(isV2 ? day.name : day.nombre) || `${day.exercises?.length || 0} ejercicios`}
-                          </p>
-                          {totalSets > 0 && (
-                            <div className="mt-2">
-                              <div className="h-1 bg-border rounded-full overflow-hidden">
-                                <div 
-                                  className={cn(
-                                    "h-full transition-all",
-                                    isComplete ? "bg-success" : "bg-primary"
-                                  )}
-                                  style={{ width: `${progress}%` }}
-                                />
-                              </div>
-                              <p className="text-xs text-text-muted mt-1">
-                                {completedSets}/{totalSets}
-                              </p>
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  );
-                })}
-            </div>
+                <div className="flex-1 overflow-hidden" ref={daysContainerRef}>
+                  <div 
+                    className="flex gap-2 transition-transform duration-300"
+                    style={{ transform: `translateX(-${daysScrollIndex * (100 / 3 + 2)}%)` }}
+                  >
+                    {displayDays.map((day: any) => (
+                      <DayCard 
+                        key={day.id} 
+                        day={day} 
+                        isV2={isV2} 
+                        selectedMicroIndex={selectedMicroIndex}
+                        router={router}
+                        className="w-[calc(33.333%-5.33px)] shrink-0"
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
+                  onClick={() => setDaysScrollIndex(Math.min(maxDaysScroll, daysScrollIndex + 1))}
+                  disabled={daysScrollIndex >= maxDaysScroll}
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            ) : (
+              /* Grid centrado para hasta 3 días */
+              <div className={cn(
+                "flex gap-2",
+                displayDays.length === 1 && "justify-center",
+                displayDays.length === 2 && "justify-center",
+                displayDays.length === 3 && "justify-between"
+              )}>
+                {displayDays.map((day: any) => (
+                  <DayCard 
+                    key={day.id} 
+                    day={day} 
+                    isV2={isV2} 
+                    selectedMicroIndex={selectedMicroIndex}
+                    router={router}
+                    className={cn(
+                      displayDays.length === 1 && "w-1/2",
+                      displayDays.length === 2 && "w-[calc(50%-4px)]",
+                      displayDays.length === 3 && "flex-1"
+                    )}
+                  />
+                ))}
+              </div>
+            )
           ) : (
             <Card className="bg-surface/80 border-border">
               <CardContent className="p-6 text-center">
@@ -328,6 +348,26 @@ export default function RoutinePage() {
             </Card>
           )}
         </div>
+
+        {/* Muscle group summary */}
+        {sortedMuscleGroups.length > 0 && (
+          <Card className="bg-surface/50 border-border">
+            <CardContent className="p-3">
+              <p className="text-xs text-text-muted mb-2">Grupos musculares en M{(currentMicro as any)?.order || selectedMicroIndex + 1}:</p>
+              <div className="flex flex-wrap gap-2">
+                {sortedMuscleGroups.map(([group, count]) => (
+                  <Badge 
+                    key={group} 
+                    variant="outline" 
+                    className="text-[10px] border-accent/30 text-accent"
+                  >
+                    {group}: {count}
+                  </Badge>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Quick Stats */}
         {currentMicro?.days && currentMicro.days.length > 0 && (
@@ -364,5 +404,92 @@ export default function RoutinePage() {
         )}
       </div>
     </div>
+  );
+}
+
+// ==================== DAY CARD COMPONENT ====================
+function DayCard({ 
+  day, 
+  isV2, 
+  selectedMicroIndex, 
+  router,
+  className 
+}: { 
+  day: any; 
+  isV2: boolean; 
+  selectedMicroIndex: number;
+  router: ReturnType<typeof useRouter>;
+  className?: string;
+}) {
+  const totalSets = day.exercises?.reduce(
+    (acc: number, ex: any) => acc + (ex.sets?.length || 0), 0
+  ) || 0;
+  const completedSets = day.exercises?.reduce(
+    (acc: number, ex: any) => acc + (ex.sets?.filter((s: any) => 
+      isV2 ? (s.isCompleted || s.completedAt) : s.status === "completed"
+    ).length || 0), 0
+  ) || 0;
+  const progress = totalSets > 0 ? (completedSets / totalSets) * 100 : 0;
+  const isComplete = progress === 100;
+  const isStarted = completedSets > 0;
+
+  return (
+    <motion.div
+      whileTap={{ scale: 0.95 }}
+      className={className}
+    >
+      <Card
+        className={cn(
+          "cursor-pointer border-2 transition-all h-full",
+          isComplete 
+            ? "bg-success/10 border-success/50" 
+            : isStarted 
+              ? "bg-warning/10 border-warning/50"
+              : "bg-surface/80 border-border hover:border-primary/50"
+        )}
+        onClick={() => router.push(`/student/routine/workout/${day.id}?micro=${selectedMicroIndex}`)}
+      >
+        <CardContent className="p-4 text-center">
+          <div className={cn(
+            "w-10 h-10 rounded-full mx-auto mb-2 flex items-center justify-center",
+            isComplete 
+              ? "bg-success/20" 
+              : isStarted 
+                ? "bg-warning/20"
+                : "bg-primary/20"
+          )}>
+            {isComplete ? (
+              <CheckCircle2 className="w-5 h-5 text-success" />
+            ) : isStarted ? (
+              <Play className="w-5 h-5 text-warning" />
+            ) : (
+              <Dumbbell className="w-5 h-5 text-primary" />
+            )}
+          </div>
+          <p className="font-bold text-text text-lg">
+            DÍA {isV2 ? day.dayNumber : day.dia}
+          </p>
+          <p className="text-xs text-text-muted truncate">
+            {(isV2 ? day.name : day.nombre) || `${day.exercises?.length || 0} ejercicios`}
+          </p>
+          {totalSets > 0 && (
+            <div className="mt-2">
+              <div className="h-1 bg-border rounded-full overflow-hidden">
+                <div 
+                  className={cn(
+                    "h-full transition-all",
+                    isComplete ? "bg-success" : "bg-primary"
+                  )}
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              <p className="text-xs text-text-muted mt-1">
+                {completedSets}/{totalSets}
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </motion.div>
   );
 }

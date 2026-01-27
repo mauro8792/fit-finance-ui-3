@@ -65,7 +65,15 @@ export interface TemplateExercise {
   notes?: string;
   dayId: string;
   sets: TemplateSet[];
+  
+  // ========== SUPERSERIE FUSIONADA ==========
+  linkedExerciseId?: string;     // ID del ejercicio con el que se combina
+  isFirstInSuperset?: boolean;   // Si es el primero de la superserie (para mostrar fusionado al alumno)
+  linkWithNext?: boolean;        // Si se combina con el siguiente ejercicio
 }
+
+// Tipo de técnica de alta intensidad
+export type SetTechnique = 'normal' | 'amrap' | 'dropset' | 'restpause' | 'myoreps' | 'isohold';
 
 export interface TemplateSet {
   id: string;
@@ -82,6 +90,28 @@ export interface TemplateSet {
   restSeconds?: number;
   technique?: string;
   exerciseId: string;
+  
+  // ========== TÉCNICAS DE ALTA INTENSIDAD ==========
+  setTechnique?: SetTechnique;
+  
+  // Drop Set - kg sugeridos por cada drop
+  dropSetTargets?: { targetLoad?: number; targetReps?: string }[];
+  
+  // Rest-Pause
+  isRestPause?: boolean;
+  restPauseSets?: number;      // Cantidad de mini-sets (ej: 3)
+  restPauseRest?: string;      // Descanso entre sets (ej: "10-15")
+  
+  // Myo Reps
+  isMyoReps?: boolean;
+  myoActivationReps?: string;  // Reps de activación (ej: "12-15")
+  myoMiniSets?: number;        // Cantidad mini-sets (ej: 4)
+  myoMiniReps?: string;        // Reps por mini-set (ej: "3-5")
+  
+  // Isohold
+  isIsohold?: boolean;
+  isoholdSeconds?: string;     // Segundos (ej: "30")
+  isoholdPosition?: string;    // Posición (ej: "abajo", "arriba", "medio")
 }
 
 // ========== RUTINA DEL ALUMNO ==========
@@ -150,6 +180,11 @@ export interface StudentExercise {
   isCompleted: boolean;
   dayId: string;
   sets: StudentSet[];
+  
+  // ========== SUPERSERIE FUSIONADA ==========
+  linkedExerciseId?: string;     // ID del ejercicio con el que se combina
+  isFirstInSuperset?: boolean;   // Si es el primero de la superserie
+  linkWithNext?: boolean;        // Si se combina con el siguiente ejercicio
 }
 
 export interface StudentSet {
@@ -162,7 +197,8 @@ export interface StudentSet {
   isWarmup?: boolean;
   isDropSet: boolean;
   dropSetCount?: number;
-  dropSetData?: { reps?: string; load?: number }[]; // Datos de cada drop
+  dropSetData?: { reps?: string; load?: number }[]; // Datos de cada drop (alumno completa)
+  dropSetTargets?: { targetLoad?: number; targetReps?: string }[]; // Kg sugeridos por el coach
   isAmrap: boolean;
   isExtra?: boolean;
   amrapInstruction?: string;
@@ -176,6 +212,28 @@ export interface StudentSet {
   completedAt?: string;
   notes?: string;
   exerciseId: string;
+  
+  // ========== TÉCNICAS DE ALTA INTENSIDAD ==========
+  setTechnique?: SetTechnique;
+  
+  // Rest-Pause
+  isRestPause?: boolean;
+  restPauseSets?: number;
+  restPauseRest?: string;
+  restPauseData?: { actualReps?: string }[]; // Datos del alumno para cada mini-set
+  
+  // Myo Reps
+  isMyoReps?: boolean;
+  myoActivationReps?: string;
+  myoMiniSets?: number;
+  myoMiniReps?: string;
+  myoMiniSetsData?: { actualReps?: string }[]; // Datos del alumno para cada mini-set
+  
+  // Isohold
+  isIsohold?: boolean;
+  isoholdSeconds?: string;
+  isoholdPosition?: string;
+  isoholdCompleted?: boolean; // Si completó el isohold
 }
 
 // ========== DTOs ==========
@@ -220,6 +278,10 @@ export interface AddExerciseDto {
   defaultRir?: number;
   defaultRpe?: number;
   coachNotes?: string;
+  
+  // ========== SUPERSERIE FUSIONADA ==========
+  linkedExerciseId?: string;
+  linkWithNext?: boolean;
 }
 
 export interface AddSetDto {
@@ -236,6 +298,28 @@ export interface AddSetDto {
   restSeconds?: number;
   technique?: string;
   dropSetCount?: number;
+  
+  // ========== TÉCNICAS DE ALTA INTENSIDAD ==========
+  setTechnique?: SetTechnique;
+  
+  // Drop Set - kg sugeridos por cada drop
+  dropSetTargets?: { targetLoad?: number; targetReps?: string }[];
+  
+  // Rest-Pause
+  isRestPause?: boolean;
+  restPauseSets?: number;
+  restPauseRest?: string;
+  
+  // Myo Reps
+  isMyoReps?: boolean;
+  myoActivationReps?: string;
+  myoMiniSets?: number;
+  myoMiniReps?: string;
+  
+  // Isohold
+  isIsohold?: boolean;
+  isoholdSeconds?: string;
+  isoholdPosition?: string;
 }
 
 export interface AssignTemplateDto {

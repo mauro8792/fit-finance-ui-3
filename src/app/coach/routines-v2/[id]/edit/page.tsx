@@ -32,6 +32,7 @@ import {
   Dumbbell,
   Calendar,
   Plus,
+  Minus,
   Flame,
   ArrowDownToLine,
   Info,
@@ -42,12 +43,64 @@ import {
   Search,
   Check,
   Loader2,
+  Timer,
+  Repeat,
+  Lock,
+  Link2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTemplate } from "@/hooks/useRoutineV2";
 import { getExerciseCatalog, type CatalogExercise } from "@/lib/api/coach";
 import * as routineV2Api from "@/lib/api/routine-v2";
 import type { TemplateExercise, TemplateSet } from "@/types/routine-v2";
+
+// ==================== TYPES ====================
+type SetType = "normal" | "amrap" | "dropset" | "restpause" | "myoreps" | "isohold";
+
+interface DropConfig {
+  kg: string;
+  reps?: string;
+}
+
+interface SetConfig {
+  id: string;
+  reps: string;
+  kg: string;
+  rir: string;
+  type: SetType;
+  dropCount?: number;
+  drops?: DropConfig[];
+  restPauseSets?: number;
+  restPauseRest?: string;
+  myoActivationReps?: string;
+  myoMiniSets?: number;
+  myoMiniReps?: string;
+  isoholdSeconds?: string;
+  isoholdPosition?: string;
+}
+
+// Helper functions
+const createDefaultSet = (index: number): SetConfig => ({
+  id: `set-${Date.now()}-${index}`,
+  reps: "10-12",
+  kg: "",
+  rir: "2",
+  type: "normal",
+});
+
+const repsQuickOptions = [
+  { label: "8-10", value: "8-10" },
+  { label: "10-12", value: "10-12" },
+  { label: "12-15", value: "12-15" },
+  { label: "15-20", value: "15-20" },
+  { label: "AMRAP", value: "AMRAP" },
+  { label: "las que salgan", value: "las que salgan" },
+];
+
+const kgQuickOptionsNumeric = ["10", "15", "20", "25", "30", "35", "40", "45", "50", "55", "60"];
 
 // ==================== COMPONENT ====================
 export default function EditRoutineV2Page() {
@@ -76,17 +129,109 @@ export default function EditRoutineV2Page() {
   // Search
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Series form state
-  const [seriesCount, setSeriesCount] = useState("3");
-  const [repsRange, setRepsRange] = useState("10-12");
-  const [rir, setRir] = useState("");
-  const [rpe, setRpe] = useState("");
+  // Series form state - Nuevo sistema con array de sets
+  const [editingSets, setEditingSets] = useState<SetConfig[]>([]);
+  const [expandedSetId, setExpandedSetId] = useState<string | null>(null);
   const [rest, setRest] = useState("2");
-  const [kg, setKg] = useState("");
   const [notes, setNotes] = useState("");
-  const [includeAmrap, setIncludeAmrap] = useState(false);
-  const [includeDropSet, setIncludeDropSet] = useState(false);
-  const [dropSetCount, setDropSetCount] = useState("2");
+  const [linkWithNext, setLinkWithNext] = useState(false);
+
+  // Helper: Add set
+  const handleAddSet = () => {
+    setEditingSets([...editingSets, createDefaultSet(editingSets.length)]);
+  };
+
+  // Helper: Remove set
+  const handleRemoveSet = () => {
+    if (editingSets.length > 1) {
+      setEditingSets(editingSets.slice(0, -1));
+    }
+  };
+
+  // Helper: Update set field
+  const updateSetField = (setId: string, field: keyof SetConfig, value: string | number | DropConfig[]) => {
+    setEditingSets(editingSets.map(s => 
+      s.id === setId ? { ...s, [field]: value } : s
+    ));
+  };
+
+  // Helper: Toggle set type
+  const toggleSetType = (setId: string, type: SetType) => {
+    setEditingSets(editingSets.map(s => {
+      if (s.id !== setId) return s;
+      
+      if (s.type === type) {
+        return { 
+          ...s, 
+          type: "normal", 
+          reps: s.reps === "AMRAP" ? "10-12" : s.reps, 
+          drops: undefined, 
+          dropCount: undefined,
+          restPauseSets: undefined,
+          restPauseRest: undefined,
+          myoActivationReps: undefined,
+          myoMiniSets: undefined,
+          myoMiniReps: undefined,
+          isoholdSeconds: undefined,
+          isoholdPosition: undefined,
+        };
+      } else {
+        const baseSet = { 
+          ...s, 
+          type,
+          drops: undefined, 
+          dropCount: undefined,
+          restPauseSets: undefined,
+          restPauseRest: undefined,
+          myoActivationReps: undefined,
+          myoMiniSets: undefined,
+          myoMiniReps: undefined,
+          isoholdSeconds: undefined,
+          isoholdPosition: undefined,
+        };
+        
+        switch (type) {
+          case "amrap":
+            return { ...baseSet, reps: "AMRAP" };
+          case "dropset":
+            return { ...baseSet, dropCount: 2, drops: [{ kg: "", reps: "" }, { kg: "", reps: "" }] };
+          case "restpause":
+            return { ...baseSet, restPauseSets: 3, restPauseRest: "10-15" };
+          case "myoreps":
+            return { ...baseSet, myoActivationReps: "12-15", myoMiniSets: 4, myoMiniReps: "3-5" };
+          case "isohold":
+            return { ...baseSet, isoholdSeconds: "30", isoholdPosition: "abajo" };
+          default:
+            return baseSet;
+        }
+      }
+    }));
+  };
+
+  // Helper: Update drop count
+  const updateDropCount = (setId: string, count: number) => {
+    setEditingSets(editingSets.map(s => {
+      if (s.id !== setId) return s;
+      const currentDrops = s.drops || [];
+      let newDrops: DropConfig[];
+      if (count > currentDrops.length) {
+        newDrops = [...currentDrops, ...Array.from({ length: count - currentDrops.length }, () => ({ kg: "", reps: "" }))];
+      } else {
+        newDrops = currentDrops.slice(0, count);
+      }
+      return { ...s, dropCount: count, drops: newDrops };
+    }));
+  };
+
+  // Helper: Update drop kg
+  const updateDropKg = (setId: string, dropIndex: number, kg: string) => {
+    setEditingSets(editingSets.map(s => {
+      if (s.id !== setId || !s.drops) return s;
+      const newDrops = [...s.drops];
+      newDrops[dropIndex] = { ...newDrops[dropIndex], kg };
+      return { ...s, drops: newDrops };
+    }));
+  };
 
   // Replication dialog
   const [showReplicateDialog, setShowReplicateDialog] = useState(false);
@@ -130,16 +275,11 @@ export default function EditRoutineV2Page() {
 
   // Reset form
   const resetForm = () => {
-    setSeriesCount("3");
-    setRepsRange("10-12");
-    setRir("");
-    setRpe("");
+    setEditingSets([createDefaultSet(0), createDefaultSet(1), createDefaultSet(2)]);
+    setExpandedSetId(null);
     setRest("2");
-    setKg("");
     setNotes("");
-    setIncludeAmrap(false);
-    setIncludeDropSet(false);
-    setDropSetCount("2");
+    setLinkWithNext(false);
   };
 
   // Handle exercise selection from catalog
@@ -152,33 +292,54 @@ export default function EditRoutineV2Page() {
 
   // Add exercise with sets
   const handleAddExercise = async () => {
-    if (!selectedCatalogExercise || !currentDay) return;
+    if (!selectedCatalogExercise || !currentDay || editingSets.length === 0) return;
 
     setSaving(true);
     try {
-      // 1. Create exercise
+      // 1. Create exercise using first set's reps as default
+      const firstSet = editingSets[0];
       const newExercise = await routineV2Api.addExercise(currentDay.id, {
         exerciseCatalogId: selectedCatalogExercise.id,
-        defaultReps: repsRange,
+        defaultReps: firstSet.reps !== "AMRAP" ? firstSet.reps : "10-12",
         defaultRestSeconds: rest ? parseInt(rest) * 60 : 120,
-        defaultRir: rir ? parseInt(rir) : undefined,
-        defaultRpe: rpe ? parseInt(rpe) : undefined,
+        defaultRir: firstSet.rir ? parseInt(firstSet.rir) : undefined,
         notes: notes || undefined,
+        linkWithNext: linkWithNext || undefined,
       });
 
-      // 2. Create sets
-      const count = parseInt(seriesCount) || 3;
-      for (let i = 0; i < count; i++) {
-        const isLast = i === count - 1;
-        await routineV2Api.addSet(newExercise.id, {
-          targetReps: (isLast && includeAmrap) ? "AMRAP" : repsRange,
-          targetLoad: kg ? parseFloat(kg) : undefined,
-          targetRir: rir ? parseInt(rir) : undefined,
-          targetRpe: rpe ? parseInt(rpe) : undefined,
-          isAmrap: isLast && includeAmrap,
-          isDropSet: isLast && includeDropSet,
-          dropSetCount: (isLast && includeDropSet) ? parseInt(dropSetCount) : undefined,
-        });
+      // 2. Create sets - each with its individual config
+      for (const set of editingSets) {
+        const setData: Record<string, unknown> = {
+          targetReps: set.reps,
+          targetLoad: set.kg ? parseFloat(set.kg) : undefined,
+          targetRir: set.rir ? parseInt(set.rir) : undefined,
+          isAmrap: set.type === "amrap",
+          isDropSet: set.type === "dropset",
+        };
+        
+        // Apply technique-specific data
+        if (set.type === "dropset") {
+          setData.dropSetCount = set.dropCount || 2;
+          setData.dropSetTargets = set.drops?.map(d => ({
+            targetLoad: d.kg ? parseFloat(d.kg) : undefined,
+            targetReps: d.reps || undefined,
+          }));
+        } else if (set.type === "restpause") {
+          setData.isRestPause = true;
+          setData.restPauseSets = set.restPauseSets || 3;
+          setData.restPauseRest = set.restPauseRest || "10-15";
+        } else if (set.type === "myoreps") {
+          setData.isMyoReps = true;
+          setData.myoActivationReps = set.myoActivationReps || "12-15";
+          setData.myoMiniSets = set.myoMiniSets || 4;
+          setData.myoMiniReps = set.myoMiniReps || "3-5";
+        } else if (set.type === "isohold") {
+          setData.isIsohold = true;
+          setData.isoholdSeconds = set.isoholdSeconds || "30";
+          setData.isoholdPosition = set.isoholdPosition || "abajo";
+        }
+        
+        await routineV2Api.addSet(newExercise.id, setData);
       }
 
       await refetch();
@@ -211,6 +372,54 @@ export default function EditRoutineV2Page() {
     setEditingExercise(exercise);
     setNotes(exercise.notes || "");
     setRest(exercise.defaultRestSeconds ? String(exercise.defaultRestSeconds / 60) : "2");
+    setLinkWithNext(exercise.linkWithNext || false);
+    
+    // Convert existing sets to SetConfig format
+    const sortedSets = exercise.sets?.slice().sort((a, b) => a.order - b.order) || [];
+    const convertedSets: SetConfig[] = sortedSets.map((set, idx) => {
+      let type: SetType = "normal";
+      if (set.isAmrap) type = "amrap";
+      else if (set.isDropSet) type = "dropset";
+      else if (set.isRestPause) type = "restpause";
+      else if (set.isMyoReps) type = "myoreps";
+      else if (set.isIsohold) type = "isohold";
+      
+      // Convert dropSetTargets to drops format
+      const drops: DropConfig[] | undefined = set.dropSetTargets?.map(d => ({
+        kg: d.targetLoad?.toString() || "",
+        reps: d.targetReps || ""
+      }));
+      
+      return {
+        id: `set-edit-${idx}-${Date.now()}`,
+        reps: set.isAmrap ? "AMRAP" : (set.targetReps || "10-12"),
+        kg: set.targetLoad?.toString() || "",
+        rir: set.targetRir?.toString() || "2",
+        type,
+        dropCount: set.dropSetCount,
+        drops: drops,
+        restPauseSets: set.restPauseSets,
+        restPauseRest: set.restPauseRest,
+        myoActivationReps: set.myoActivationReps,
+        myoMiniSets: set.myoMiniSets,
+        myoMiniReps: set.myoMiniReps,
+        isoholdSeconds: set.isoholdSeconds,
+        isoholdPosition: set.isoholdPosition,
+      };
+    });
+    
+    // If no sets, create 3 default ones
+    if (convertedSets.length === 0) {
+      setEditingSets([
+        createDefaultSet(0),
+        createDefaultSet(1),
+        createDefaultSet(2),
+      ]);
+    } else {
+      setEditingSets(convertedSets);
+    }
+    
+    setExpandedSetId(null);
     setShowEditExercise(true);
   };
 
@@ -220,13 +429,73 @@ export default function EditRoutineV2Page() {
     
     setSaving(true);
     try {
+      // Update exercise basic info
       await routineV2Api.updateExercise(editingExercise.id, {
         notes: notes || undefined,
         defaultRestSeconds: rest ? parseInt(rest) * 60 : undefined,
+        linkWithNext: linkWithNext || undefined,
       });
+
+      // Get existing sets
+      const existingSets = editingExercise.sets?.slice().sort((a, b) => a.order - b.order) || [];
+      const existingCount = existingSets.length;
+      const newCount = editingSets.length;
+
+      // Delete extra sets if we have fewer now
+      if (newCount < existingCount) {
+        for (let i = newCount; i < existingCount; i++) {
+          await routineV2Api.deleteSet(existingSets[i].id);
+        }
+      }
+
+      // Update existing sets or add new ones
+      for (let i = 0; i < editingSets.length; i++) {
+        const setConfig = editingSets[i];
+        const isAmrap = setConfig.type === "amrap";
+        const isDropSet = setConfig.type === "dropset";
+        const isRestPause = setConfig.type === "restpause";
+        const isMyoReps = setConfig.type === "myoreps";
+        const isIsohold = setConfig.type === "isohold";
+
+        const setData = {
+          targetReps: isAmrap ? "AMRAP" : setConfig.reps,
+          targetRir: setConfig.rir ? parseInt(setConfig.rir) : undefined,
+          targetLoad: setConfig.kg ? parseFloat(setConfig.kg) : undefined,
+          restSeconds: rest ? parseInt(rest) * 60 : 120,
+          order: i + 1,
+          isAmrap,
+          isDropSet,
+          dropSetCount: isDropSet ? setConfig.dropCount : undefined,
+          dropSetTargets: isDropSet && setConfig.drops ? setConfig.drops.map((d, idx) => ({
+            order: idx + 1,
+            targetReps: d.reps || setConfig.reps,
+            targetLoad: d.kg ? parseFloat(d.kg) : undefined,
+          })) : undefined,
+          isRestPause,
+          restPauseSets: isRestPause ? setConfig.restPauseSets : undefined,
+          restPauseRest: isRestPause ? setConfig.restPauseRest : undefined,
+          isMyoReps,
+          myoActivationReps: isMyoReps ? setConfig.myoActivationReps : undefined,
+          myoMiniSets: isMyoReps ? setConfig.myoMiniSets : undefined,
+          myoMiniReps: isMyoReps ? setConfig.myoMiniReps : undefined,
+          isIsohold,
+          isoholdSeconds: isIsohold ? setConfig.isoholdSeconds : undefined,
+          isoholdPosition: isIsohold ? setConfig.isoholdPosition : undefined,
+        };
+
+        if (i < existingCount) {
+          // Update existing set
+          await routineV2Api.updateSet(existingSets[i].id, setData);
+        } else {
+          // Add new set
+          await routineV2Api.addSet(editingExercise.id, setData);
+        }
+      }
+
       await refetch();
       setShowEditExercise(false);
       setEditingExercise(null);
+      resetForm();
       toast.success("Cambios guardados");
     } catch (err) {
       console.error("Error updating:", err);
@@ -332,26 +601,53 @@ export default function EditRoutineV2Page() {
           </Button>
         </div>
 
-        {/* Microcycle selector */}
+        {/* Microcycle selector - Centrado con flechas */}
         <div className="px-4 pb-3">
-          <div className="flex gap-2 overflow-x-auto pb-2">
-            {sortedMicrocycles.map((m, idx) => (
-              <button
-                key={m.id}
-                onClick={() => {
-                  setCurrentMicroIndex(idx);
+          <div className="flex items-center justify-center gap-3">
+            <button
+              onClick={() => {
+                if (currentMicroIndex > 0) {
+                  setCurrentMicroIndex(currentMicroIndex - 1);
                   setCurrentDayIndex(0);
-                }}
-                className={cn(
-                  "px-4 py-1.5 rounded-full text-sm font-medium transition-all whitespace-nowrap",
-                  idx === currentMicroIndex
-                    ? "bg-amber-500 text-black"
-                    : "bg-[#1a1a24] text-gray-400 hover:bg-[#252530]"
-                )}
-              >
-                M{m.order}
-              </button>
-            ))}
+                }
+              }}
+              disabled={currentMicroIndex === 0}
+              className={cn(
+                "w-8 h-8 rounded-full flex items-center justify-center transition-all",
+                currentMicroIndex === 0
+                  ? "text-gray-600 cursor-not-allowed"
+                  : "text-gray-400 hover:bg-[#1a1a24] hover:text-white"
+              )}
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            
+            <div className="flex items-center gap-2 bg-[#1a1a24] rounded-full px-4 py-2 min-w-[140px] justify-center">
+              <span className="text-amber-500 font-bold text-lg">
+                Microciclo {currentMicrocycle?.order || 1}
+              </span>
+              <span className="text-gray-500 text-sm">
+                / {sortedMicrocycles.length}
+              </span>
+            </div>
+            
+            <button
+              onClick={() => {
+                if (currentMicroIndex < sortedMicrocycles.length - 1) {
+                  setCurrentMicroIndex(currentMicroIndex + 1);
+                  setCurrentDayIndex(0);
+                }
+              }}
+              disabled={currentMicroIndex >= sortedMicrocycles.length - 1}
+              className={cn(
+                "w-8 h-8 rounded-full flex items-center justify-center transition-all",
+                currentMicroIndex >= sortedMicrocycles.length - 1
+                  ? "text-gray-600 cursor-not-allowed"
+                  : "text-gray-400 hover:bg-[#1a1a24] hover:text-white"
+              )}
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
           </div>
         </div>
 
@@ -624,8 +920,8 @@ export default function EditRoutineV2Page() {
 
       {/* Sheet: Configurar series */}
       <Sheet open={showSeriesForm} onOpenChange={setShowSeriesForm}>
-        <SheetContent side="bottom" className="bg-[#13131a] border-[#1e1e2a] h-[85vh] rounded-t-2xl overflow-y-auto mx-auto max-w-[420px] sm:max-w-[480px]">
-          <SheetHeader className="pb-3">
+        <SheetContent side="bottom" className="bg-[#13131a] border-[#1e1e2a] h-[90vh] rounded-t-2xl overflow-hidden mx-auto max-w-[420px] sm:max-w-[480px]">
+          <SheetHeader className="pb-2">
             <SheetTitle className="text-white flex items-center gap-2 text-base">
               <Dumbbell className="w-5 h-5 text-amber-500 shrink-0" />
               <span className="truncate">{selectedCatalogExercise?.name}</span>
@@ -635,169 +931,267 @@ export default function EditRoutineV2Page() {
             </SheetDescription>
           </SheetHeader>
 
-          <div className="space-y-4 pb-24 px-1">
-            {/* Quick presets */}
-            <div>
-              <Label className="text-[11px] text-gray-400 mb-1.5 block">Presets rápidos</Label>
-              <div className="grid grid-cols-4 gap-1.5">
-                {[
-                  { label: "3x10-12", series: "3", reps: "10-12", r: "2", p: "" },
-                  { label: "4x8-10", series: "4", reps: "8-10", r: "2", p: "" },
-                  { label: "3x15", series: "3", reps: "15", r: "1", p: "" },
-                  { label: "5x5", series: "5", reps: "5", r: "", p: "8" },
-                ].map((preset) => (
+          <div className="overflow-y-auto h-[calc(90vh-180px)] pb-4 -mx-6 px-6">
+            {/* Quick actions */}
+            <div className="flex items-center justify-between py-3 border-b border-[#1e1e2a]">
+              <span className="text-xs text-gray-400">{editingSets.length} series</span>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleRemoveSet}
+                  disabled={editingSets.length <= 1}
+                  className="h-8 px-3 text-xs border-gray-700 text-gray-400 hover:bg-gray-800"
+                >
+                  <Minus className="w-3 h-3 mr-1" />
+                  Quitar
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleAddSet}
+                  className="h-8 px-3 text-xs border-amber-700 text-amber-400 hover:bg-amber-500/10"
+                >
+                  <Plus className="w-3 h-3 mr-1" />
+                  Agregar
+                </Button>
+              </div>
+            </div>
+
+            {/* Series list */}
+            <div className="space-y-2 py-3">
+              {editingSets.map((set, idx) => (
+                <div
+                  key={set.id}
+                  className={cn(
+                    "rounded-xl border transition-all",
+                    expandedSetId === set.id 
+                      ? "border-amber-500/50 bg-amber-500/5" 
+                      : "border-[#2a2a35] bg-[#1a1a24]",
+                    set.type === "amrap" && "border-purple-500/30 bg-purple-500/5",
+                    set.type === "dropset" && "border-orange-500/30 bg-orange-500/5",
+                    set.type === "restpause" && "border-cyan-500/30 bg-cyan-500/5",
+                    set.type === "myoreps" && "border-pink-500/30 bg-pink-500/5",
+                    set.type === "isohold" && "border-emerald-500/30 bg-emerald-500/5"
+                  )}
+                >
+                  {/* Serie header - siempre visible */}
                   <button
-                    key={preset.label}
-                    onClick={() => {
-                      setSeriesCount(preset.series);
-                      setRepsRange(preset.reps);
-                      setRir(preset.r);
-                      setRpe(preset.p);
-                    }}
-                    className="px-2 py-1.5 rounded-lg text-xs bg-[#1a1a24] text-gray-300 hover:bg-amber-500/20 hover:text-amber-400 transition-colors"
+                    onClick={() => setExpandedSetId(expandedSetId === set.id ? null : set.id)}
+                    className="w-full p-3 flex items-center justify-between"
                   >
-                    {preset.label}
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        "w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm",
+                        set.type === "amrap" ? "bg-purple-600 text-white" :
+                        set.type === "dropset" ? "bg-orange-600 text-white" :
+                        set.type === "restpause" ? "bg-cyan-600 text-white" :
+                        set.type === "myoreps" ? "bg-pink-600 text-white" :
+                        set.type === "isohold" ? "bg-emerald-600 text-white" :
+                        "bg-gray-700 text-white"
+                      )}>
+                        {set.type === "amrap" ? <Flame className="w-4 h-4" /> : 
+                         set.type === "dropset" ? <ArrowDownToLine className="w-4 h-4" /> :
+                         set.type === "restpause" ? <Timer className="w-4 h-4" /> :
+                         set.type === "myoreps" ? <Repeat className="w-4 h-4" /> :
+                         set.type === "isohold" ? <Lock className="w-4 h-4" /> :
+                         idx + 1}
+                      </div>
+                      <div className="text-left">
+                        <p className="text-sm font-medium text-white">
+                          {set.reps} reps
+                          {set.kg && <span className="text-gray-400"> · {set.kg}kg</span>}
+                        </p>
+                        <p className="text-[10px] text-gray-500">
+                          {set.type !== "normal" && <span className="text-amber-400 capitalize">{set.type} · </span>}
+                          RIR: {set.rir || "—"}
+                        </p>
+                      </div>
+                    </div>
+                    <ChevronDown className={cn(
+                      "w-4 h-4 text-gray-500 transition-transform",
+                      expandedSetId === set.id && "rotate-180"
+                    )} />
                   </button>
-                ))}
-              </div>
-            </div>
 
-            {/* Series count + reps */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-[11px] text-gray-400 mb-1.5 block">Series</Label>
-                <Input
-                  type="text"
-                  inputMode="numeric"
-                  value={seriesCount}
-                  onChange={(e) => setSeriesCount(e.target.value)}
-                  className="bg-[#1a1a24] border-[#2a2a35] text-white text-center text-base font-semibold h-11"
-                />
-              </div>
-              <div>
-                <Label className="text-[11px] text-gray-400 mb-1.5 block">Reps</Label>
-                <Input
-                  type="text"
-                  value={repsRange}
-                  onChange={(e) => setRepsRange(e.target.value)}
-                  placeholder="10-12"
-                  className="bg-[#1a1a24] border-[#2a2a35] text-white text-center text-base font-semibold h-11"
-                />
-              </div>
-            </div>
-
-            {/* RIR + RPE + Kg + Rest - 4 columns */}
-            <div className="grid grid-cols-4 gap-2">
-              <div>
-                <Label className="text-[10px] text-gray-400 mb-1 block">RIR</Label>
-                <Input
-                  type="text"
-                  inputMode="numeric"
-                  value={rir}
-                  onChange={(e) => setRir(e.target.value)}
-                  placeholder="—"
-                  className="bg-[#1a1a24] border-[#2a2a35] text-white text-center text-sm h-10"
-                />
-              </div>
-              <div>
-                <Label className="text-[10px] text-gray-400 mb-1 block">RPE</Label>
-                <Input
-                  type="text"
-                  inputMode="numeric"
-                  value={rpe}
-                  onChange={(e) => setRpe(e.target.value)}
-                  placeholder="—"
-                  className="bg-[#1a1a24] border-[#2a2a35] text-white text-center text-sm h-10"
-                />
-              </div>
-              <div>
-                <Label className="text-[10px] text-gray-400 mb-1 block">Kg</Label>
-                <Input
-                  type="text"
-                  inputMode="decimal"
-                  value={kg}
-                  onChange={(e) => setKg(e.target.value)}
-                  placeholder="—"
-                  className="bg-[#1a1a24] border-[#2a2a35] text-white text-center text-sm h-10"
-                />
-              </div>
-              <div>
-                <Label className="text-[10px] text-gray-400 mb-1 block">Desc.</Label>
-                <Input
-                  type="text"
-                  inputMode="decimal"
-                  value={rest}
-                  onChange={(e) => setRest(e.target.value)}
-                  placeholder="2"
-                  className="bg-[#1a1a24] border-[#2a2a35] text-white text-center text-sm h-10"
-                />
-              </div>
-            </div>
-
-            {/* AMRAP / Drop Set toggles */}
-            <div className="space-y-2">
-              <Label className="text-[11px] text-gray-400 block">Última serie especial</Label>
-              
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => {
-                    setIncludeAmrap(!includeAmrap);
-                    if (!includeAmrap) setIncludeDropSet(false);
-                  }}
-                  className={cn(
-                    "p-3 rounded-lg flex flex-col items-center gap-1.5 transition-all",
-                    includeAmrap
-                      ? "bg-purple-600/20 border border-purple-500/50"
-                      : "bg-[#1a1a24] border border-transparent"
-                  )}
-                >
-                  <Flame className={cn("w-5 h-5", includeAmrap ? "text-purple-400" : "text-gray-500")} />
-                  <span className="text-xs font-medium text-white">AMRAP</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setIncludeDropSet(!includeDropSet);
-                    if (!includeDropSet) setIncludeAmrap(false);
-                  }}
-                  className={cn(
-                    "p-3 rounded-lg flex flex-col items-center gap-1.5 transition-all",
-                    includeDropSet
-                      ? "bg-orange-600/20 border border-orange-500/50"
-                      : "bg-[#1a1a24] border border-transparent"
-                  )}
-                >
-                  <ArrowDownToLine className={cn("w-5 h-5", includeDropSet ? "text-orange-400" : "text-gray-500")} />
-                  <span className="text-xs font-medium text-white">Drop Set</span>
-                </button>
-              </div>
-
-              {/* Drop set count */}
-              {includeDropSet && (
-                <div className="flex items-center gap-2 pt-1">
-                  <Label className="text-[11px] text-gray-400">Drops:</Label>
-                  <div className="flex gap-1.5">
-                    {["1", "2", "3"].map((n) => (
-                      <button
-                        key={n}
-                        onClick={() => setDropSetCount(n)}
-                        className={cn(
-                          "w-9 h-8 rounded-lg text-sm font-medium transition-all",
-                          dropSetCount === n
-                            ? "bg-orange-600 text-white"
-                            : "bg-[#1a1a24] text-gray-400"
-                        )}
+                  {/* Serie expandida - edición detallada */}
+                  <AnimatePresence>
+                    {expandedSetId === set.id && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden"
                       >
-                        {n}
-                      </button>
-                    ))}
-                  </div>
+                        <div className="px-3 pb-4 space-y-4 border-t border-[#2a2a35]">
+                          {/* Tipo de serie */}
+                          <div className="pt-3">
+                            <Label className="text-[10px] text-gray-400 mb-2 block">Técnica de alta intensidad</Label>
+                            <div className="grid grid-cols-3 gap-2">
+                              <button onClick={() => toggleSetType(set.id, "normal")} className={cn("p-2 rounded-lg text-[10px] font-medium transition-all", set.type === "normal" ? "bg-gray-600 text-white" : "bg-[#252530] text-gray-400")}>Normal</button>
+                              <button onClick={() => toggleSetType(set.id, "amrap")} className={cn("p-2 rounded-lg text-[10px] font-medium transition-all flex items-center justify-center gap-1", set.type === "amrap" ? "bg-purple-600 text-white" : "bg-[#252530] text-gray-400")}><Flame className="w-3 h-3" />AMRAP</button>
+                              <button onClick={() => toggleSetType(set.id, "dropset")} className={cn("p-2 rounded-lg text-[10px] font-medium transition-all flex items-center justify-center gap-1", set.type === "dropset" ? "bg-orange-600 text-white" : "bg-[#252530] text-gray-400")}><ArrowDownToLine className="w-3 h-3" />Drop</button>
+                              <button onClick={() => toggleSetType(set.id, "restpause")} className={cn("p-2 rounded-lg text-[10px] font-medium transition-all flex items-center justify-center gap-1", set.type === "restpause" ? "bg-cyan-600 text-white" : "bg-[#252530] text-gray-400")}><Timer className="w-3 h-3" />Rest-Pause</button>
+                              <button onClick={() => toggleSetType(set.id, "myoreps")} className={cn("p-2 rounded-lg text-[10px] font-medium transition-all flex items-center justify-center gap-1", set.type === "myoreps" ? "bg-pink-600 text-white" : "bg-[#252530] text-gray-400")}><Repeat className="w-3 h-3" />Myo Reps</button>
+                              <button onClick={() => toggleSetType(set.id, "isohold")} className={cn("p-2 rounded-lg text-[10px] font-medium transition-all flex items-center justify-center gap-1", set.type === "isohold" ? "bg-emerald-600 text-white" : "bg-[#252530] text-gray-400")}><Lock className="w-3 h-3" />Isohold</button>
+                            </div>
+                          </div>
+
+                          {/* Repeticiones */}
+                          {set.type !== "amrap" && (
+                            <div>
+                              <Label className="text-[10px] text-gray-400 mb-2 block">Repeticiones</Label>
+                              <Input
+                                value={set.reps}
+                                onChange={(e) => updateSetField(set.id, "reps", e.target.value)}
+                                placeholder="10-12"
+                                className="bg-[#252530] border-gray-700 text-white text-center h-10"
+                              />
+                              <div className="flex flex-wrap gap-1 mt-2">
+                                {repsQuickOptions.map(opt => (
+                                  <button key={opt.value} onClick={() => updateSetField(set.id, "reps", opt.value)} className={cn("px-2 py-1 rounded text-[10px]", set.reps === opt.value ? "bg-amber-600 text-white" : "bg-[#252530] text-gray-400")}>{opt.label}</button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Carga sugerida */}
+                          <div>
+                            <Label className="text-[10px] text-gray-400 mb-2 block">Carga sugerida (kg)</Label>
+                            <Input
+                              value={set.kg}
+                              onChange={(e) => updateSetField(set.id, "kg", e.target.value)}
+                              placeholder="Ej: 50"
+                              className="bg-[#252530] border-gray-700 text-white text-center h-10"
+                              inputMode="decimal"
+                            />
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {kgQuickOptionsNumeric.slice(0, 8).map(kg => (
+                                <button key={kg} onClick={() => updateSetField(set.id, "kg", kg)} className={cn("px-2 py-1 rounded text-[10px]", set.kg === kg ? "bg-amber-600 text-white" : "bg-[#252530] text-gray-400")}>{kg}</button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Drop Set config */}
+                          {set.type === "dropset" && (
+                            <div className="bg-orange-950/20 rounded-lg p-3 border border-orange-500/20">
+                              <Label className="text-[10px] text-orange-400 mb-3 block font-semibold">Configurar drops</Label>
+                              <div className="flex gap-2 mb-3">
+                                {[1, 2, 3].map(n => (
+                                  <button key={n} onClick={() => updateDropCount(set.id, n)} className={cn("w-10 h-8 rounded-lg text-sm font-medium", set.dropCount === n ? "bg-orange-600 text-white" : "bg-[#252530] text-gray-400")}>{n}</button>
+                                ))}
+                              </div>
+                              <div className="space-y-2">
+                                {set.drops?.map((drop, dropIdx) => (
+                                  <div key={dropIdx} className="flex items-center gap-2">
+                                    <span className="text-xs text-orange-400 font-medium w-12">Drop {dropIdx + 1}:</span>
+                                    <Input value={drop.kg} onChange={(e) => updateDropKg(set.id, dropIdx, e.target.value)} placeholder="Ej: 60" className="flex-1 bg-[#252530] border-orange-500/30 text-white text-center h-8 text-sm" inputMode="decimal" />
+                                    <span className="text-[10px] text-gray-500">kg</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Rest-Pause config */}
+                          {set.type === "restpause" && (
+                            <div className="bg-cyan-950/20 rounded-lg p-3 border border-cyan-500/20">
+                              <Label className="text-[10px] text-cyan-400 mb-3 block font-semibold">Configurar Rest-Pause</Label>
+                              <div className="space-y-3">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-cyan-400 font-medium w-24">Mini-series:</span>
+                                  <div className="flex gap-1">
+                                    {[2, 3, 4, 5].map(n => (
+                                      <button key={n} onClick={() => updateSetField(set.id, "restPauseSets", n)} className={cn("w-8 h-7 rounded text-xs font-medium", set.restPauseSets === n ? "bg-cyan-600 text-white" : "bg-[#252530] text-gray-400")}>{n}</button>
+                                    ))}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-cyan-400 font-medium w-24">Descanso:</span>
+                                  <Input value={set.restPauseRest || ""} onChange={(e) => updateSetField(set.id, "restPauseRest", e.target.value)} placeholder="10-15" className="flex-1 bg-[#252530] border-cyan-500/30 text-white text-center h-8 text-sm" />
+                                  <span className="text-[10px] text-gray-500">seg</span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Myo Reps config */}
+                          {set.type === "myoreps" && (
+                            <div className="bg-pink-950/20 rounded-lg p-3 border border-pink-500/20">
+                              <Label className="text-[10px] text-pink-400 mb-3 block font-semibold">Configurar Myo Reps</Label>
+                              <div className="space-y-3">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-pink-400 font-medium w-24">Activación:</span>
+                                  <Input value={set.myoActivationReps || ""} onChange={(e) => updateSetField(set.id, "myoActivationReps", e.target.value)} placeholder="12-15" className="flex-1 bg-[#252530] border-pink-500/30 text-white text-center h-8 text-sm" />
+                                  <span className="text-[10px] text-gray-500">reps</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-pink-400 font-medium w-24">Mini-series:</span>
+                                  <div className="flex gap-1">
+                                    {[3, 4, 5, 6].map(n => (
+                                      <button key={n} onClick={() => updateSetField(set.id, "myoMiniSets", n)} className={cn("w-8 h-7 rounded text-xs font-medium", set.myoMiniSets === n ? "bg-pink-600 text-white" : "bg-[#252530] text-gray-400")}>{n}</button>
+                                    ))}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-pink-400 font-medium w-24">Reps/mini:</span>
+                                  <Input value={set.myoMiniReps || ""} onChange={(e) => updateSetField(set.id, "myoMiniReps", e.target.value)} placeholder="3-5" className="flex-1 bg-[#252530] border-pink-500/30 text-white text-center h-8 text-sm" />
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Isohold config */}
+                          {set.type === "isohold" && (
+                            <div className="bg-emerald-950/20 rounded-lg p-3 border border-emerald-500/20">
+                              <Label className="text-[10px] text-emerald-400 mb-3 block font-semibold">Configurar Isohold</Label>
+                              <div className="space-y-3">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-emerald-400 font-medium w-24">Segundos:</span>
+                                  <Input value={set.isoholdSeconds || ""} onChange={(e) => updateSetField(set.id, "isoholdSeconds", e.target.value)} placeholder="30" className="flex-1 bg-[#252530] border-emerald-500/30 text-white text-center h-8 text-sm" />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-emerald-400 font-medium w-24">Posición:</span>
+                                  <div className="flex gap-1">
+                                    {["abajo", "medio", "arriba"].map(pos => (
+                                      <button key={pos} onClick={() => updateSetField(set.id, "isoholdPosition", pos)} className={cn("flex-1 h-7 rounded text-[9px] font-medium capitalize", set.isoholdPosition === pos ? "bg-emerald-600 text-white" : "bg-[#252530] text-gray-400")}>{pos}</button>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
-              )}
+              ))}
+            </div>
+
+            {/* Superserie toggle */}
+            <div className="space-y-2 py-3 border-t border-[#1e1e2a]">
+              <button
+                onClick={() => setLinkWithNext(!linkWithNext)}
+                className={cn(
+                  "w-full p-3 rounded-lg flex items-center justify-between transition-all",
+                  linkWithNext
+                    ? "bg-blue-600/20 border border-blue-500/50"
+                    : "bg-[#1a1a24] border border-transparent"
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <Link2 className={cn("w-4 h-4", linkWithNext ? "text-blue-400" : "text-gray-500")} />
+                  <span className="text-xs font-medium text-white">Combinar con siguiente (Superserie)</span>
+                </div>
+                <div className={cn("w-10 h-5 rounded-full transition-all relative", linkWithNext ? "bg-blue-600" : "bg-gray-700")}>
+                  <div className={cn("absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all", linkWithNext ? "left-5" : "left-0.5")} />
+                </div>
+              </button>
             </div>
 
             {/* Notes */}
-            <div>
+            <div className="py-3">
               <Label className="text-[11px] text-gray-400 mb-1.5 block">Notas para el alumno</Label>
               <Textarea
                 value={notes}
@@ -808,10 +1202,10 @@ export default function EditRoutineV2Page() {
             </div>
           </div>
 
-          <SheetFooter className="sticky bottom-0 left-0 right-0 p-4 bg-[#13131a] border-t border-[#1e1e2a] -mx-6 px-6 mt-4">
+          <SheetFooter className="sticky bottom-0 p-4 bg-[#13131a] border-t border-[#1e1e2a]">
             <Button
               onClick={handleAddExercise}
-              disabled={saving}
+              disabled={saving || editingSets.length === 0}
               className="w-full h-11 bg-amber-500 hover:bg-amber-600 text-black font-semibold"
             >
               {saving ? (
@@ -827,19 +1221,345 @@ export default function EditRoutineV2Page() {
 
       {/* Sheet: Editar ejercicio */}
       <Sheet open={showEditExercise} onOpenChange={setShowEditExercise}>
-        <SheetContent side="bottom" className="bg-[#13131a] border-[#1e1e2a] rounded-t-2xl mx-auto max-w-[420px] sm:max-w-[480px]">
+        <SheetContent side="bottom" className="bg-[#13131a] border-[#1e1e2a] rounded-t-2xl h-[90vh] overflow-y-auto mx-auto max-w-[420px] sm:max-w-[480px]">
           <SheetHeader className="pb-4">
-            <SheetTitle className="text-white">
-              Editar {editingExercise?.exerciseCatalog?.name}
+            <SheetTitle className="text-white flex items-center gap-2">
+              <Dumbbell className="w-5 h-5 text-amber-500" />
+              {editingExercise?.exerciseCatalog?.name}
             </SheetTitle>
             <SheetDescription className="text-gray-500">
-              Modificá el descanso y las notas del ejercicio
+              {editingExercise?.exerciseCatalog?.muscleGroup} · Configurá las series y repeticiones
             </SheetDescription>
           </SheetHeader>
 
-          <div className="space-y-4 pb-4">
+          <div className="space-y-4 pb-24">
+            {/* Series count controls */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-400">{editingSets.length} series</span>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRemoveSet}
+                  disabled={editingSets.length <= 1}
+                  className="h-8 px-3 bg-[#1a1a24] border-[#2a2a35] text-gray-400 hover:text-white"
+                >
+                  <Minus className="w-4 h-4 mr-1" />
+                  Quitar
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddSet}
+                  className="h-8 px-3 bg-[#1a1a24] border-[#2a2a35] text-amber-500 hover:text-amber-400"
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  Agregar
+                </Button>
+              </div>
+            </div>
+
+            {/* Sets list */}
+            <div className="space-y-2">
+              {editingSets.map((setConfig, idx) => (
+                <div 
+                  key={setConfig.id} 
+                  className="bg-[#1a1a24] rounded-lg border border-[#2a2a35] overflow-hidden"
+                >
+                  {/* Set header - clickable to expand */}
+                  <button
+                    onClick={() => setExpandedSetId(expandedSetId === setConfig.id ? null : setConfig.id)}
+                    className="w-full p-3 flex items-center justify-between hover:bg-[#1e1e28] transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="w-6 h-6 rounded-full bg-amber-500/20 text-amber-500 flex items-center justify-center text-sm font-bold">
+                        {idx + 1}
+                      </span>
+                      <div className="text-left">
+                        <span className="text-white font-medium">
+                          {setConfig.type === "amrap" ? "AMRAP" : `${setConfig.reps} reps`}
+                        </span>
+                        {setConfig.kg && <span className="text-gray-500 ml-2">· {setConfig.kg}kg</span>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {setConfig.type !== "normal" && (
+                        <Badge variant="outline" className={cn(
+                          "text-[10px]",
+                          setConfig.type === "amrap" && "border-purple-500/50 text-purple-400",
+                          setConfig.type === "dropset" && "border-orange-500/50 text-orange-400",
+                          setConfig.type === "restpause" && "border-blue-500/50 text-blue-400",
+                          setConfig.type === "myoreps" && "border-green-500/50 text-green-400",
+                          setConfig.type === "isohold" && "border-cyan-500/50 text-cyan-400"
+                        )}>
+                          {setConfig.type === "amrap" && "AMRAP"}
+                          {setConfig.type === "dropset" && `Drop x${setConfig.dropCount || 2}`}
+                          {setConfig.type === "restpause" && "Rest-Pause"}
+                          {setConfig.type === "myoreps" && "Myo Reps"}
+                          {setConfig.type === "isohold" && "Isohold"}
+                        </Badge>
+                      )}
+                      <ChevronDown className={cn(
+                        "w-4 h-4 text-gray-500 transition-transform",
+                        expandedSetId === setConfig.id && "rotate-180"
+                      )} />
+                    </div>
+                  </button>
+
+                  {/* Expanded content */}
+                  {expandedSetId === setConfig.id && (
+                    <div className="px-3 pb-3 space-y-4 border-t border-[#2a2a35]">
+                      {/* Technique selection */}
+                      <div className="pt-3">
+                        <Label className="text-xs text-gray-400 mb-2 block">Técnica de alta intensidad</Label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {[
+                            { type: "normal" as SetType, label: "Normal" },
+                            { type: "amrap" as SetType, label: "AMRAP", icon: Flame },
+                            { type: "dropset" as SetType, label: "Drop", icon: ArrowDownToLine },
+                          ].map(({ type, label, icon: Icon }) => (
+                            <button
+                              key={type}
+                              onClick={() => toggleSetType(setConfig.id, type)}
+                              className={cn(
+                                "py-2 px-3 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1",
+                                setConfig.type === type
+                                  ? "bg-amber-500 text-black"
+                                  : "bg-[#252530] text-gray-400 hover:text-white"
+                              )}
+                            >
+                              {Icon && <Icon className="w-3 h-3" />}
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 mt-2">
+                          {[
+                            { type: "restpause" as SetType, label: "Rest-Pause", icon: Timer },
+                            { type: "myoreps" as SetType, label: "Myo Reps", icon: Repeat },
+                            { type: "isohold" as SetType, label: "Isohold", icon: Lock },
+                          ].map(({ type, label, icon: Icon }) => (
+                            <button
+                              key={type}
+                              onClick={() => toggleSetType(setConfig.id, type)}
+                              className={cn(
+                                "py-2 px-3 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1",
+                                setConfig.type === type
+                                  ? "bg-amber-500 text-black"
+                                  : "bg-[#252530] text-gray-400 hover:text-white"
+                              )}
+                            >
+                              {Icon && <Icon className="w-3 h-3" />}
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Reps */}
+                      <div>
+                        <Label className="text-xs text-gray-400 mb-2 block">Repeticiones</Label>
+                        <Input
+                          value={setConfig.reps}
+                          onChange={(e) => updateSetField(setConfig.id, "reps", e.target.value)}
+                          className="bg-[#252530] border-[#2a2a35] text-white text-center text-lg"
+                          placeholder="10-12"
+                        />
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {repsQuickOptions.map((opt) => (
+                            <button
+                              key={opt.value}
+                              onClick={() => updateSetField(setConfig.id, "reps", opt.value)}
+                              className={cn(
+                                "px-2.5 py-1 rounded text-xs transition-colors",
+                                setConfig.reps === opt.value
+                                  ? "bg-amber-500 text-black"
+                                  : "bg-[#252530] text-gray-400 hover:text-white"
+                              )}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Load */}
+                      <div>
+                        <Label className="text-xs text-gray-400 mb-2 block">Carga sugerida (kg)</Label>
+                        <Input
+                          value={setConfig.kg}
+                          onChange={(e) => updateSetField(setConfig.id, "kg", e.target.value)}
+                          className="bg-[#252530] border-[#2a2a35] text-white text-center"
+                          placeholder="Ej: 50"
+                          inputMode="decimal"
+                        />
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {kgQuickOptionsNumeric.map((kg) => (
+                            <button
+                              key={kg}
+                              onClick={() => updateSetField(setConfig.id, "kg", kg)}
+                              className={cn(
+                                "px-2 py-1 rounded text-xs transition-colors",
+                                setConfig.kg === kg
+                                  ? "bg-amber-500 text-black"
+                                  : "bg-[#252530] text-gray-400 hover:text-white"
+                              )}
+                            >
+                              {kg}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* RIR */}
+                      <div>
+                        <Label className="text-xs text-gray-400 mb-2 block">RIR esperado</Label>
+                        <Input
+                          value={setConfig.rir}
+                          onChange={(e) => updateSetField(setConfig.id, "rir", e.target.value)}
+                          className="bg-[#252530] border-[#2a2a35] text-white text-center w-20"
+                          placeholder="2"
+                          inputMode="numeric"
+                        />
+                      </div>
+
+                      {/* Drop Set config */}
+                      {setConfig.type === "dropset" && (
+                        <div className="p-3 bg-orange-950/20 rounded-lg border border-orange-500/30 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs text-orange-400">Cantidad de drops</Label>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => updateDropCount(setConfig.id, Math.max(1, (setConfig.dropCount || 2) - 1))}
+                                className="w-7 h-7 rounded bg-[#252530] text-gray-400 hover:text-white"
+                              >
+                                -
+                              </button>
+                              <span className="text-white font-medium w-6 text-center">{setConfig.dropCount || 2}</span>
+                              <button
+                                onClick={() => updateDropCount(setConfig.id, Math.min(5, (setConfig.dropCount || 2) + 1))}
+                                className="w-7 h-7 rounded bg-[#252530] text-gray-400 hover:text-white"
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+                          {setConfig.drops?.map((drop, dropIdx) => (
+                            <div key={dropIdx} className="flex items-center gap-2">
+                              <span className="text-xs text-orange-400 w-16">Drop {dropIdx + 1}:</span>
+                              <Input
+                                value={drop.kg}
+                                onChange={(e) => updateDropKg(setConfig.id, dropIdx, e.target.value)}
+                                className="bg-[#252530] border-orange-500/30 text-white text-center flex-1"
+                                placeholder="kg"
+                                inputMode="decimal"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Rest-Pause config */}
+                      {setConfig.type === "restpause" && (
+                        <div className="p-3 bg-blue-950/20 rounded-lg border border-blue-500/30 space-y-3">
+                          <div>
+                            <Label className="text-xs text-blue-400 mb-1 block">Mini-sets</Label>
+                            <Input
+                              type="number"
+                              value={setConfig.restPauseSets || 3}
+                              onChange={(e) => updateSetField(setConfig.id, "restPauseSets", parseInt(e.target.value) || 3)}
+                              className="bg-[#252530] border-blue-500/30 text-white w-20"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs text-blue-400 mb-1 block">Descanso entre mini-sets (seg)</Label>
+                            <Input
+                              value={setConfig.restPauseRest || "10-15"}
+                              onChange={(e) => updateSetField(setConfig.id, "restPauseRest", e.target.value)}
+                              className="bg-[#252530] border-blue-500/30 text-white"
+                              placeholder="10-15"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Myo Reps config */}
+                      {setConfig.type === "myoreps" && (
+                        <div className="p-3 bg-green-950/20 rounded-lg border border-green-500/30 space-y-3">
+                          <div>
+                            <Label className="text-xs text-green-400 mb-1 block">Reps activación</Label>
+                            <Input
+                              value={setConfig.myoActivationReps || "12-15"}
+                              onChange={(e) => updateSetField(setConfig.id, "myoActivationReps", e.target.value)}
+                              className="bg-[#252530] border-green-500/30 text-white"
+                              placeholder="12-15"
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <Label className="text-xs text-green-400 mb-1 block">Mini-sets</Label>
+                              <Input
+                                type="number"
+                                value={setConfig.myoMiniSets || 4}
+                                onChange={(e) => updateSetField(setConfig.id, "myoMiniSets", parseInt(e.target.value) || 4)}
+                                className="bg-[#252530] border-green-500/30 text-white"
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-xs text-green-400 mb-1 block">Reps x mini</Label>
+                              <Input
+                                value={setConfig.myoMiniReps || "3-5"}
+                                onChange={(e) => updateSetField(setConfig.id, "myoMiniReps", e.target.value)}
+                                className="bg-[#252530] border-green-500/30 text-white"
+                                placeholder="3-5"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Isohold config */}
+                      {setConfig.type === "isohold" && (
+                        <div className="p-3 bg-cyan-950/20 rounded-lg border border-cyan-500/30 space-y-3">
+                          <div>
+                            <Label className="text-xs text-cyan-400 mb-1 block">Duración (segundos)</Label>
+                            <Input
+                              value={setConfig.isoholdSeconds || "30"}
+                              onChange={(e) => updateSetField(setConfig.id, "isoholdSeconds", e.target.value)}
+                              className="bg-[#252530] border-cyan-500/30 text-white"
+                              placeholder="30"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs text-cyan-400 mb-1 block">Posición</Label>
+                            <div className="flex gap-2">
+                              {["abajo", "arriba", "medio"].map((pos) => (
+                                <button
+                                  key={pos}
+                                  onClick={() => updateSetField(setConfig.id, "isoholdPosition", pos)}
+                                  className={cn(
+                                    "flex-1 py-2 rounded text-xs font-medium transition-colors",
+                                    setConfig.isoholdPosition === pos
+                                      ? "bg-cyan-500 text-black"
+                                      : "bg-[#252530] text-gray-400 hover:text-white"
+                                  )}
+                                >
+                                  {pos.charAt(0).toUpperCase() + pos.slice(1)}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Rest */}
             <div>
-              <Label className="text-xs text-gray-400 mb-2 block">Descanso (min)</Label>
+              <Label className="text-xs text-gray-400 mb-2 block">Descanso entre series (min)</Label>
               <Input
                 type="text"
                 inputMode="decimal"
@@ -848,17 +1568,40 @@ export default function EditRoutineV2Page() {
                 className="bg-[#1a1a24] border-[#2a2a35] text-white"
               />
             </div>
+
+            {/* Notes */}
             <div>
               <Label className="text-xs text-gray-400 mb-2 block">Notas</Label>
               <Textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                className="bg-[#1a1a24] border-[#2a2a35] text-white min-h-[80px]"
+                className="bg-[#1a1a24] border-[#2a2a35] text-white min-h-[60px]"
+                placeholder="Instrucciones especiales..."
               />
+            </div>
+
+            {/* Link with next */}
+            <div className="flex items-center justify-between p-3 bg-[#1a1a24] rounded-lg border border-[#2a2a35]">
+              <div className="flex items-center gap-2">
+                <Link2 className="w-4 h-4 text-blue-400" />
+                <span className="text-sm text-gray-300">Superserie con siguiente</span>
+              </div>
+              <button
+                onClick={() => setLinkWithNext(!linkWithNext)}
+                className={cn(
+                  "w-12 h-6 rounded-full transition-colors relative",
+                  linkWithNext ? "bg-blue-500" : "bg-[#2a2a35]"
+                )}
+              >
+                <div className={cn(
+                  "absolute top-1 w-4 h-4 rounded-full bg-white transition-transform",
+                  linkWithNext ? "translate-x-7" : "translate-x-1"
+                )} />
+              </button>
             </div>
           </div>
 
-          <SheetFooter className="sticky bottom-0 p-4 bg-[#13131a] border-t border-[#1e1e2a] -mx-6 px-6">
+          <SheetFooter className="sticky bottom-0 py-4 bg-[#13131a] border-t border-[#1e1e2a]">
             <Button
               onClick={handleSaveEdit}
               disabled={saving}

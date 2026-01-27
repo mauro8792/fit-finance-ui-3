@@ -26,6 +26,7 @@ import {
   Copy,
   Trash2,
   ChevronRight,
+  ChevronLeft,
   Clock,
   MoreVertical,
   Share2,
@@ -170,6 +171,25 @@ export default function TemplateDetailPage() {
     (acc, m) => acc + (m.days?.reduce((a, d) => a + (d.exercises?.reduce((a2, e) => a2 + (e.sets?.length || 0), 0) || 0), 0) || 0),
     0
   ) || 0;
+
+  // Calculate muscle group summary for current microcycle
+  const getMicrocycleMuscleGroups = () => {
+    if (!currentMicrocycle?.days) return {};
+    
+    const muscleGroups: Record<string, number> = {};
+    
+    currentMicrocycle.days.forEach(day => {
+      day.exercises?.forEach(exercise => {
+        const group = exercise.exerciseCatalog?.muscleGroup || "Sin grupo";
+        muscleGroups[group] = (muscleGroups[group] || 0) + 1;
+      });
+    });
+    
+    return muscleGroups;
+  };
+
+  const muscleGroupsSummary = getMicrocycleMuscleGroups();
+  const sortedMuscleGroups = Object.entries(muscleGroupsSummary).sort((a, b) => b[1] - a[1]);
 
   // Publish template
   const handlePublish = async () => {
@@ -378,22 +398,61 @@ export default function TemplateDetailPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {/* Week tabs */}
-              <div className="flex gap-2 overflow-x-auto pb-2">
-                {sortedMicrocycles.map((m, idx) => (
-                  <Badge
-                    key={m.id}
-                    variant={idx === selectedWeek ? "default" : "outline"}
-                    className={cn(
-                      "cursor-pointer shrink-0",
-                      idx === selectedWeek && "bg-accent text-black"
-                    )}
-                    onClick={() => setSelectedWeek(idx)}
-                  >
-                    M{m.order}
-                  </Badge>
-                ))}
+              {/* Microcycle navigation - Centrado con flechas */}
+              <div className="flex items-center justify-center gap-3">
+                <button
+                  onClick={() => selectedWeek > 0 && setSelectedWeek(selectedWeek - 1)}
+                  disabled={selectedWeek === 0}
+                  className={cn(
+                    "w-8 h-8 rounded-full flex items-center justify-center transition-all",
+                    selectedWeek === 0
+                      ? "text-gray-600 cursor-not-allowed"
+                      : "text-gray-400 hover:bg-surface hover:text-white"
+                  )}
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                
+                <div className="flex items-center gap-2 bg-surface rounded-full px-4 py-2 min-w-[140px] justify-center">
+                  <span className="text-accent font-bold text-lg">
+                    Microciclo {currentMicrocycle?.order || 1}
+                  </span>
+                  <span className="text-text-muted text-sm">
+                    / {sortedMicrocycles.length}
+                  </span>
+                </div>
+                
+                <button
+                  onClick={() => selectedWeek < sortedMicrocycles.length - 1 && setSelectedWeek(selectedWeek + 1)}
+                  disabled={selectedWeek >= sortedMicrocycles.length - 1}
+                  className={cn(
+                    "w-8 h-8 rounded-full flex items-center justify-center transition-all",
+                    selectedWeek >= sortedMicrocycles.length - 1
+                      ? "text-gray-600 cursor-not-allowed"
+                      : "text-gray-400 hover:bg-surface hover:text-white"
+                  )}
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
               </div>
+
+              {/* Muscle group summary for current microcycle */}
+              {sortedMuscleGroups.length > 0 && (
+                <div className="p-3 bg-background/50 rounded-lg">
+                  <p className="text-xs text-text-muted mb-2">Grupos musculares en M{currentMicrocycle?.order}:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {sortedMuscleGroups.map(([group, count]) => (
+                      <Badge 
+                        key={group} 
+                        variant="outline" 
+                        className="text-[10px] border-accent/30 text-accent"
+                      >
+                        {group}: {count}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Days preview */}
               <div className="space-y-2">

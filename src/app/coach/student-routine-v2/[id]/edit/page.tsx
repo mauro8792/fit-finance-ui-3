@@ -44,6 +44,10 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
+  Timer,
+  Repeat,
+  Lock,
+  Link2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useStudentRoutine } from "@/hooks/useRoutineV2";
@@ -284,6 +288,23 @@ export default function EditStudentRoutinePage() {
   const [includeAmrap, setIncludeAmrap] = useState(false);
   const [includeDropSet, setIncludeDropSet] = useState(false);
   const [dropSetCount, setDropSetCount] = useState("2");
+  
+  // ========== TÉCNICAS DE ALTA INTENSIDAD ==========
+  const [includeRestPause, setIncludeRestPause] = useState(false);
+  const [restPauseSets, setRestPauseSets] = useState("3");
+  const [restPauseRest, setRestPauseRest] = useState("10-15");
+  
+  const [includeMyoReps, setIncludeMyoReps] = useState(false);
+  const [myoActivationReps, setMyoActivationReps] = useState("12-15");
+  const [myoMiniSets, setMyoMiniSets] = useState("4");
+  const [myoMiniReps, setMyoMiniReps] = useState("3-5");
+  
+  const [includeIsohold, setIncludeIsohold] = useState(false);
+  const [isoholdSeconds, setIsoholdSeconds] = useState("30");
+  const [isoholdPosition, setIsoholdPosition] = useState("abajo");
+  
+  // ========== SUPERSERIE ==========
+  const [linkWithNext, setLinkWithNext] = useState(false);
 
   // Local exercises state for drag and drop
   const [localExercises, setLocalExercises] = useState<StudentExercise[]>([]);
@@ -366,6 +387,18 @@ export default function EditStudentRoutinePage() {
     setIncludeAmrap(false);
     setIncludeDropSet(false);
     setDropSetCount("2");
+    // Reset técnicas HIT
+    setIncludeRestPause(false);
+    setRestPauseSets("3");
+    setRestPauseRest("10-15");
+    setIncludeMyoReps(false);
+    setMyoActivationReps("12-15");
+    setMyoMiniSets("4");
+    setMyoMiniReps("3-5");
+    setIncludeIsohold(false);
+    setIsoholdSeconds("30");
+    setIsoholdPosition("abajo");
+    setLinkWithNext(false);
   };
 
   // Handle exercise selection from catalog
@@ -388,13 +421,42 @@ export default function EditStudentRoutinePage() {
       const sets = [];
       for (let i = 0; i < count; i++) {
         const isLast = i === count - 1;
-        sets.push({
-          targetReps: (isLast && includeAmrap) ? "AMRAP" : repsRange,
+        
+        // Determinar tipo de set y técnica
+        let setData: Record<string, unknown> = {
+          targetReps: repsRange,
           targetLoad: kg ? parseFloat(kg) : undefined,
           targetRir: rir ? parseInt(rir) : undefined,
           targetRpe: rpe ? parseInt(rpe) : undefined,
-          isDropSet: isLast && includeDropSet,
-        });
+          isDropSet: false,
+          isAmrap: false,
+        };
+        
+        // Solo aplicar técnica a la última serie
+        if (isLast) {
+          if (includeAmrap) {
+            setData.targetReps = "AMRAP";
+            setData.isAmrap = true;
+          } else if (includeDropSet) {
+            setData.isDropSet = true;
+            setData.dropSetCount = parseInt(dropSetCount) || 2;
+          } else if (includeRestPause) {
+            setData.isRestPause = true;
+            setData.restPauseSets = parseInt(restPauseSets) || 3;
+            setData.restPauseRest = restPauseRest || "10-15";
+          } else if (includeMyoReps) {
+            setData.isMyoReps = true;
+            setData.myoActivationReps = myoActivationReps || "12-15";
+            setData.myoMiniSets = parseInt(myoMiniSets) || 4;
+            setData.myoMiniReps = myoMiniReps || "3-5";
+          } else if (includeIsohold) {
+            setData.isIsohold = true;
+            setData.isoholdSeconds = isoholdSeconds || "30";
+            setData.isoholdPosition = isoholdPosition || "abajo";
+          }
+        }
+        
+        sets.push(setData);
       }
 
       // Single API call - batch insert exercise + sets
@@ -405,6 +467,7 @@ export default function EditStudentRoutinePage() {
         targetRir: rir ? parseInt(rir) : undefined,
         targetRpe: rpe ? parseInt(rpe) : undefined,
         coachNotes: notes || undefined,
+        linkWithNext: linkWithNext || undefined,
         sets,
       });
 
@@ -445,12 +508,40 @@ export default function EditStudentRoutinePage() {
     setRpe(exercise.targetRpe?.toString() || "");
     setRest(((exercise.restSeconds || 120) / 60).toString());
     setSeriesCount((exercise.sets?.length || 3).toString());
-    // Check if last set is AMRAP or Drop Set
+    
+    // Check if last set has any HIT technique
     const lastSet = exercise.sets?.slice().sort((a, b) => a.order - b.order).pop();
-    setIncludeAmrap(lastSet?.isAmrap || false);
-    setIncludeDropSet(lastSet?.isDropSet || false);
-    setDropSetCount((lastSet?.dropSetCount || 2).toString());
+    
+    // Reset all techniques first
+    setIncludeAmrap(false);
+    setIncludeDropSet(false);
+    setIncludeRestPause(false);
+    setIncludeMyoReps(false);
+    setIncludeIsohold(false);
+    
+    // Set the active technique based on last set
+    if (lastSet?.isAmrap) {
+      setIncludeAmrap(true);
+    } else if (lastSet?.isDropSet) {
+      setIncludeDropSet(true);
+      setDropSetCount((lastSet.dropSetCount || 2).toString());
+    } else if (lastSet?.isRestPause) {
+      setIncludeRestPause(true);
+      setRestPauseSets((lastSet.restPauseSets || 3).toString());
+      setRestPauseRest(lastSet.restPauseRest || "10-15");
+    } else if (lastSet?.isMyoReps) {
+      setIncludeMyoReps(true);
+      setMyoActivationReps(lastSet.myoActivationReps || "12-15");
+      setMyoMiniSets((lastSet.myoMiniSets || 4).toString());
+      setMyoMiniReps(lastSet.myoMiniReps || "3-5");
+    } else if (lastSet?.isIsohold) {
+      setIncludeIsohold(true);
+      setIsoholdSeconds(lastSet.isoholdSeconds || "30");
+      setIsoholdPosition(lastSet.isoholdPosition || "abajo");
+    }
+    
     setKg(lastSet?.targetLoad?.toString() || "");
+    setLinkWithNext(exercise.linkWithNext || false);
     setShowEditExercise(true);
   };
 
@@ -489,13 +580,54 @@ export default function EditStudentRoutinePage() {
       const count = parseInt(seriesCount) || 3;
       const currentCount = editingExercise.sets?.length || 0;
       
-      // Update exercise config
+      // Helper function to build set data with HIT technique
+      const buildSetData = (isLast: boolean) => {
+        const setData: Record<string, unknown> = {
+          targetReps: repsRange,
+          targetLoad: kg ? parseFloat(kg) : undefined,
+          targetRir: rir ? parseInt(rir) : undefined,
+          targetRpe: rpe ? parseInt(rpe) : undefined,
+          isAmrap: false,
+          isDropSet: false,
+          isRestPause: false,
+          isMyoReps: false,
+          isIsohold: false,
+        };
+        
+        if (isLast) {
+          if (includeAmrap) {
+            setData.targetReps = "AMRAP";
+            setData.isAmrap = true;
+          } else if (includeDropSet) {
+            setData.isDropSet = true;
+            setData.dropSetCount = parseInt(dropSetCount) || 2;
+          } else if (includeRestPause) {
+            setData.isRestPause = true;
+            setData.restPauseSets = parseInt(restPauseSets) || 3;
+            setData.restPauseRest = restPauseRest || "10-15";
+          } else if (includeMyoReps) {
+            setData.isMyoReps = true;
+            setData.myoActivationReps = myoActivationReps || "12-15";
+            setData.myoMiniSets = parseInt(myoMiniSets) || 4;
+            setData.myoMiniReps = myoMiniReps || "3-5";
+          } else if (includeIsohold) {
+            setData.isIsohold = true;
+            setData.isoholdSeconds = isoholdSeconds || "30";
+            setData.isoholdPosition = isoholdPosition || "abajo";
+          }
+        }
+        
+        return setData;
+      };
+      
+      // Update exercise config including linkWithNext
       await routineV2Api.updateStudentExercise(editingExercise.id, {
         targetReps: repsRange || undefined,
         restSeconds: rest ? parseInt(rest) * 60 : 120,
         targetRir: rir ? parseInt(rir) : undefined,
         targetRpe: rpe ? parseInt(rpe) : undefined,
         coachNotes: notes || undefined,
+        linkWithNext: linkWithNext || undefined,
       });
 
       // If series count changed, delete old and create new
@@ -508,15 +640,7 @@ export default function EditStudentRoutinePage() {
         // Create new sets
         for (let i = 0; i < count; i++) {
           const isLast = i === count - 1;
-          await routineV2Api.addStudentSet(editingExercise.id, {
-            targetReps: (isLast && includeAmrap) ? "AMRAP" : repsRange,
-            targetLoad: kg ? parseFloat(kg) : undefined,
-            targetRir: rir ? parseInt(rir) : undefined,
-            targetRpe: rpe ? parseInt(rpe) : undefined,
-            isAmrap: isLast && includeAmrap,
-            isDropSet: isLast && includeDropSet,
-            dropSetCount: (isLast && includeDropSet) ? parseInt(dropSetCount) : undefined,
-          });
+          await routineV2Api.addStudentSet(editingExercise.id, buildSetData(isLast));
         }
       } else {
         // Update all sets in batch (single API call)
@@ -525,12 +649,7 @@ export default function EditStudentRoutinePage() {
           const isLast = idx === sortedSets.length - 1;
           return {
             id: set.id,
-            targetReps: (isLast && includeAmrap) ? "AMRAP" : repsRange,
-            targetLoad: kg ? parseFloat(kg) : undefined,
-            targetRir: rir ? parseInt(rir) : undefined,
-            isAmrap: isLast && includeAmrap,
-            isDropSet: isLast && includeDropSet,
-            dropSetCount: (isLast && includeDropSet) ? parseInt(dropSetCount) : undefined,
+            ...buildSetData(isLast),
           };
         });
         
@@ -1155,65 +1274,305 @@ export default function EditStudentRoutinePage() {
               </div>
             </div>
 
-            {/* AMRAP / Drop Set toggles */}
-            <div className="space-y-2">
-              <Label className="text-[11px] text-gray-400 block">Última serie especial</Label>
+            {/* Técnicas de Alta Intensidad */}
+            <div className="space-y-3">
+              <Label className="text-[11px] text-gray-400 block">Técnica de alta intensidad (última serie)</Label>
               
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
+                {/* AMRAP */}
                 <button
                   onClick={() => {
-                    setIncludeAmrap(!includeAmrap);
-                    if (!includeAmrap) setIncludeDropSet(false);
+                    const newVal = !includeAmrap;
+                    setIncludeAmrap(newVal);
+                    if (newVal) {
+                      setIncludeDropSet(false);
+                      setIncludeRestPause(false);
+                      setIncludeMyoReps(false);
+                      setIncludeIsohold(false);
+                    }
                   }}
                   className={cn(
-                    "p-3 rounded-lg flex flex-col items-center gap-1.5 transition-all",
+                    "p-2.5 rounded-lg flex flex-col items-center gap-1 transition-all",
                     includeAmrap
                       ? "bg-purple-600/20 border border-purple-500/50"
                       : "bg-[#1a1a24] border border-transparent"
                   )}
                 >
-                  <Flame className={cn("w-5 h-5", includeAmrap ? "text-purple-400" : "text-gray-500")} />
-                  <span className="text-xs font-medium text-white">AMRAP</span>
+                  <Flame className={cn("w-4 h-4", includeAmrap ? "text-purple-400" : "text-gray-500")} />
+                  <span className="text-[10px] font-medium text-white">AMRAP</span>
                 </button>
 
+                {/* Drop Set */}
                 <button
                   onClick={() => {
-                    setIncludeDropSet(!includeDropSet);
-                    if (!includeDropSet) setIncludeAmrap(false);
+                    const newVal = !includeDropSet;
+                    setIncludeDropSet(newVal);
+                    if (newVal) {
+                      setIncludeAmrap(false);
+                      setIncludeRestPause(false);
+                      setIncludeMyoReps(false);
+                      setIncludeIsohold(false);
+                    }
                   }}
                   className={cn(
-                    "p-3 rounded-lg flex flex-col items-center gap-1.5 transition-all",
+                    "p-2.5 rounded-lg flex flex-col items-center gap-1 transition-all",
                     includeDropSet
                       ? "bg-orange-600/20 border border-orange-500/50"
                       : "bg-[#1a1a24] border border-transparent"
                   )}
                 >
-                  <ArrowDownToLine className={cn("w-5 h-5", includeDropSet ? "text-orange-400" : "text-gray-500")} />
-                  <span className="text-xs font-medium text-white">Drop Set</span>
+                  <ArrowDownToLine className={cn("w-4 h-4", includeDropSet ? "text-orange-400" : "text-gray-500")} />
+                  <span className="text-[10px] font-medium text-white">Drop</span>
+                </button>
+
+                {/* Rest-Pause */}
+                <button
+                  onClick={() => {
+                    const newVal = !includeRestPause;
+                    setIncludeRestPause(newVal);
+                    if (newVal) {
+                      setIncludeAmrap(false);
+                      setIncludeDropSet(false);
+                      setIncludeMyoReps(false);
+                      setIncludeIsohold(false);
+                    }
+                  }}
+                  className={cn(
+                    "p-2.5 rounded-lg flex flex-col items-center gap-1 transition-all",
+                    includeRestPause
+                      ? "bg-cyan-600/20 border border-cyan-500/50"
+                      : "bg-[#1a1a24] border border-transparent"
+                  )}
+                >
+                  <Timer className={cn("w-4 h-4", includeRestPause ? "text-cyan-400" : "text-gray-500")} />
+                  <span className="text-[10px] font-medium text-white">Rest-Pause</span>
+                </button>
+
+                {/* Myo Reps */}
+                <button
+                  onClick={() => {
+                    const newVal = !includeMyoReps;
+                    setIncludeMyoReps(newVal);
+                    if (newVal) {
+                      setIncludeAmrap(false);
+                      setIncludeDropSet(false);
+                      setIncludeRestPause(false);
+                      setIncludeIsohold(false);
+                    }
+                  }}
+                  className={cn(
+                    "p-2.5 rounded-lg flex flex-col items-center gap-1 transition-all",
+                    includeMyoReps
+                      ? "bg-pink-600/20 border border-pink-500/50"
+                      : "bg-[#1a1a24] border border-transparent"
+                  )}
+                >
+                  <Repeat className={cn("w-4 h-4", includeMyoReps ? "text-pink-400" : "text-gray-500")} />
+                  <span className="text-[10px] font-medium text-white">Myo Reps</span>
+                </button>
+
+                {/* Isohold */}
+                <button
+                  onClick={() => {
+                    const newVal = !includeIsohold;
+                    setIncludeIsohold(newVal);
+                    if (newVal) {
+                      setIncludeAmrap(false);
+                      setIncludeDropSet(false);
+                      setIncludeRestPause(false);
+                      setIncludeMyoReps(false);
+                    }
+                  }}
+                  className={cn(
+                    "p-2.5 rounded-lg flex flex-col items-center gap-1 transition-all",
+                    includeIsohold
+                      ? "bg-emerald-600/20 border border-emerald-500/50"
+                      : "bg-[#1a1a24] border border-transparent"
+                  )}
+                >
+                  <Lock className={cn("w-4 h-4", includeIsohold ? "text-emerald-400" : "text-gray-500")} />
+                  <span className="text-[10px] font-medium text-white">Isohold</span>
                 </button>
               </div>
 
-              {/* Drop set count */}
+              {/* ========== CONFIGURACIONES ESPECÍFICAS ========== */}
+              
+              {/* Drop Set config */}
               {includeDropSet && (
-                <div className="flex items-center gap-2 pt-1">
-                  <Label className="text-[11px] text-gray-400">Drops:</Label>
-                  <div className="flex gap-1.5">
-                    {["1", "2", "3"].map((n) => (
-                      <button
-                        key={n}
-                        onClick={() => setDropSetCount(n)}
-                        className={cn(
-                          "w-9 h-8 rounded-lg text-sm font-medium transition-all",
-                          dropSetCount === n
-                            ? "bg-orange-600 text-white"
-                            : "bg-[#1a1a24] text-gray-400"
-                        )}
-                      >
-                        {n}
-                      </button>
-                    ))}
+                <div className="p-3 rounded-lg bg-orange-950/20 border border-orange-500/30 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Label className="text-[11px] text-orange-400">Cantidad de drops:</Label>
+                    <div className="flex gap-1.5">
+                      {["1", "2", "3"].map((n) => (
+                        <button
+                          key={n}
+                          onClick={() => setDropSetCount(n)}
+                          className={cn(
+                            "w-8 h-7 rounded-lg text-xs font-medium transition-all",
+                            dropSetCount === n
+                              ? "bg-orange-600 text-white"
+                              : "bg-[#1a1a24] text-gray-400"
+                          )}
+                        >
+                          {n}
+                        </button>
+                      ))}
+                    </div>
                   </div>
+                  <p className="text-[10px] text-orange-400/70">Bajar peso ~20% por cada drop</p>
                 </div>
+              )}
+
+              {/* Rest-Pause config */}
+              {includeRestPause && (
+                <div className="p-3 rounded-lg bg-cyan-950/20 border border-cyan-500/30 space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-[10px] text-cyan-400 mb-1 block">Mini-sets:</Label>
+                      <div className="flex gap-1">
+                        {["2", "3", "4"].map((n) => (
+                          <button
+                            key={n}
+                            onClick={() => setRestPauseSets(n)}
+                            className={cn(
+                              "flex-1 h-7 rounded text-xs font-medium transition-all",
+                              restPauseSets === n
+                                ? "bg-cyan-600 text-white"
+                                : "bg-[#1a1a24] text-gray-400"
+                            )}
+                          >
+                            {n}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-cyan-400 mb-1 block">Descanso (seg):</Label>
+                      <Input
+                        value={restPauseRest}
+                        onChange={(e) => setRestPauseRest(e.target.value)}
+                        placeholder="10-15"
+                        className="h-7 text-xs bg-[#1a1a24] border-cyan-500/30 text-white text-center"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-cyan-400/70">Hacer reps hasta fallo, descansar {restPauseRest}s, repetir {restPauseSets} veces</p>
+                </div>
+              )}
+
+              {/* Myo Reps config */}
+              {includeMyoReps && (
+                <div className="p-3 rounded-lg bg-pink-950/20 border border-pink-500/30 space-y-2">
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <Label className="text-[10px] text-pink-400 mb-1 block">Activación:</Label>
+                      <Input
+                        value={myoActivationReps}
+                        onChange={(e) => setMyoActivationReps(e.target.value)}
+                        placeholder="12-15"
+                        className="h-7 text-xs bg-[#1a1a24] border-pink-500/30 text-white text-center"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-pink-400 mb-1 block">Mini-sets:</Label>
+                      <div className="flex gap-1">
+                        {["3", "4", "5"].map((n) => (
+                          <button
+                            key={n}
+                            onClick={() => setMyoMiniSets(n)}
+                            className={cn(
+                              "flex-1 h-7 rounded text-xs font-medium transition-all",
+                              myoMiniSets === n
+                                ? "bg-pink-600 text-white"
+                                : "bg-[#1a1a24] text-gray-400"
+                            )}
+                          >
+                            {n}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-pink-400 mb-1 block">Reps/mini:</Label>
+                      <Input
+                        value={myoMiniReps}
+                        onChange={(e) => setMyoMiniReps(e.target.value)}
+                        placeholder="3-5"
+                        className="h-7 text-xs bg-[#1a1a24] border-pink-500/30 text-white text-center"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-pink-400/70">Activación {myoActivationReps} reps + {myoMiniSets} mini-sets de {myoMiniReps} reps (5-10s descanso)</p>
+                </div>
+              )}
+
+              {/* Isohold config */}
+              {includeIsohold && (
+                <div className="p-3 rounded-lg bg-emerald-950/20 border border-emerald-500/30 space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-[10px] text-emerald-400 mb-1 block">Segundos:</Label>
+                      <Input
+                        value={isoholdSeconds}
+                        onChange={(e) => setIsoholdSeconds(e.target.value)}
+                        placeholder="30"
+                        className="h-7 text-xs bg-[#1a1a24] border-emerald-500/30 text-white text-center"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-emerald-400 mb-1 block">Posición:</Label>
+                      <div className="flex gap-1">
+                        {["abajo", "medio", "arriba"].map((pos) => (
+                          <button
+                            key={pos}
+                            onClick={() => setIsoholdPosition(pos)}
+                            className={cn(
+                              "flex-1 h-7 rounded text-[9px] font-medium transition-all capitalize",
+                              isoholdPosition === pos
+                                ? "bg-emerald-600 text-white"
+                                : "bg-[#1a1a24] text-gray-400"
+                            )}
+                          >
+                            {pos}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-emerald-400/70">Mantener {isoholdSeconds}s en posición {isoholdPosition} antes de las reps</p>
+                </div>
+              )}
+            </div>
+
+            {/* Superserie toggle */}
+            <div className="space-y-2">
+              <button
+                onClick={() => setLinkWithNext(!linkWithNext)}
+                className={cn(
+                  "w-full p-3 rounded-lg flex items-center justify-between transition-all",
+                  linkWithNext
+                    ? "bg-blue-600/20 border border-blue-500/50"
+                    : "bg-[#1a1a24] border border-transparent"
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <Link2 className={cn("w-4 h-4", linkWithNext ? "text-blue-400" : "text-gray-500")} />
+                  <span className="text-xs font-medium text-white">Combinar con siguiente (Superserie)</span>
+                </div>
+                <div className={cn(
+                  "w-10 h-5 rounded-full transition-all relative",
+                  linkWithNext ? "bg-blue-600" : "bg-gray-700"
+                )}>
+                  <div className={cn(
+                    "absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all",
+                    linkWithNext ? "left-5" : "left-0.5"
+                  )} />
+                </div>
+              </button>
+              {linkWithNext && (
+                <p className="text-[10px] text-blue-400/70 px-1">
+                  Este ejercicio se mostrará combinado con el siguiente para el alumno
+                </p>
               )}
             </div>
 
@@ -1358,65 +1717,305 @@ export default function EditStudentRoutinePage() {
               </div>
             </div>
 
-            {/* AMRAP / Drop Set toggles */}
-            <div className="space-y-2">
-              <Label className="text-[11px] text-gray-400 block">Última serie especial</Label>
+            {/* Técnicas de Alta Intensidad */}
+            <div className="space-y-3">
+              <Label className="text-[11px] text-gray-400 block">Técnica de alta intensidad (última serie)</Label>
               
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
+                {/* AMRAP */}
                 <button
                   onClick={() => {
-                    setIncludeAmrap(!includeAmrap);
-                    if (!includeAmrap) setIncludeDropSet(false);
+                    const newVal = !includeAmrap;
+                    setIncludeAmrap(newVal);
+                    if (newVal) {
+                      setIncludeDropSet(false);
+                      setIncludeRestPause(false);
+                      setIncludeMyoReps(false);
+                      setIncludeIsohold(false);
+                    }
                   }}
                   className={cn(
-                    "p-3 rounded-lg flex flex-col items-center gap-1.5 transition-all",
+                    "p-2.5 rounded-lg flex flex-col items-center gap-1 transition-all",
                     includeAmrap
                       ? "bg-purple-600/20 border border-purple-500/50"
                       : "bg-[#1a1a24] border border-transparent"
                   )}
                 >
-                  <Flame className={cn("w-5 h-5", includeAmrap ? "text-purple-400" : "text-gray-500")} />
-                  <span className="text-xs font-medium text-white">AMRAP</span>
+                  <Flame className={cn("w-4 h-4", includeAmrap ? "text-purple-400" : "text-gray-500")} />
+                  <span className="text-[10px] font-medium text-white">AMRAP</span>
                 </button>
 
+                {/* Drop Set */}
                 <button
                   onClick={() => {
-                    setIncludeDropSet(!includeDropSet);
-                    if (!includeDropSet) setIncludeAmrap(false);
+                    const newVal = !includeDropSet;
+                    setIncludeDropSet(newVal);
+                    if (newVal) {
+                      setIncludeAmrap(false);
+                      setIncludeRestPause(false);
+                      setIncludeMyoReps(false);
+                      setIncludeIsohold(false);
+                    }
                   }}
                   className={cn(
-                    "p-3 rounded-lg flex flex-col items-center gap-1.5 transition-all",
+                    "p-2.5 rounded-lg flex flex-col items-center gap-1 transition-all",
                     includeDropSet
                       ? "bg-orange-600/20 border border-orange-500/50"
                       : "bg-[#1a1a24] border border-transparent"
                   )}
                 >
-                  <ArrowDownToLine className={cn("w-5 h-5", includeDropSet ? "text-orange-400" : "text-gray-500")} />
-                  <span className="text-xs font-medium text-white">Drop Set</span>
+                  <ArrowDownToLine className={cn("w-4 h-4", includeDropSet ? "text-orange-400" : "text-gray-500")} />
+                  <span className="text-[10px] font-medium text-white">Drop</span>
+                </button>
+
+                {/* Rest-Pause */}
+                <button
+                  onClick={() => {
+                    const newVal = !includeRestPause;
+                    setIncludeRestPause(newVal);
+                    if (newVal) {
+                      setIncludeAmrap(false);
+                      setIncludeDropSet(false);
+                      setIncludeMyoReps(false);
+                      setIncludeIsohold(false);
+                    }
+                  }}
+                  className={cn(
+                    "p-2.5 rounded-lg flex flex-col items-center gap-1 transition-all",
+                    includeRestPause
+                      ? "bg-cyan-600/20 border border-cyan-500/50"
+                      : "bg-[#1a1a24] border border-transparent"
+                  )}
+                >
+                  <Timer className={cn("w-4 h-4", includeRestPause ? "text-cyan-400" : "text-gray-500")} />
+                  <span className="text-[10px] font-medium text-white">Rest-Pause</span>
+                </button>
+
+                {/* Myo Reps */}
+                <button
+                  onClick={() => {
+                    const newVal = !includeMyoReps;
+                    setIncludeMyoReps(newVal);
+                    if (newVal) {
+                      setIncludeAmrap(false);
+                      setIncludeDropSet(false);
+                      setIncludeRestPause(false);
+                      setIncludeIsohold(false);
+                    }
+                  }}
+                  className={cn(
+                    "p-2.5 rounded-lg flex flex-col items-center gap-1 transition-all",
+                    includeMyoReps
+                      ? "bg-pink-600/20 border border-pink-500/50"
+                      : "bg-[#1a1a24] border border-transparent"
+                  )}
+                >
+                  <Repeat className={cn("w-4 h-4", includeMyoReps ? "text-pink-400" : "text-gray-500")} />
+                  <span className="text-[10px] font-medium text-white">Myo Reps</span>
+                </button>
+
+                {/* Isohold */}
+                <button
+                  onClick={() => {
+                    const newVal = !includeIsohold;
+                    setIncludeIsohold(newVal);
+                    if (newVal) {
+                      setIncludeAmrap(false);
+                      setIncludeDropSet(false);
+                      setIncludeRestPause(false);
+                      setIncludeMyoReps(false);
+                    }
+                  }}
+                  className={cn(
+                    "p-2.5 rounded-lg flex flex-col items-center gap-1 transition-all",
+                    includeIsohold
+                      ? "bg-emerald-600/20 border border-emerald-500/50"
+                      : "bg-[#1a1a24] border border-transparent"
+                  )}
+                >
+                  <Lock className={cn("w-4 h-4", includeIsohold ? "text-emerald-400" : "text-gray-500")} />
+                  <span className="text-[10px] font-medium text-white">Isohold</span>
                 </button>
               </div>
 
-              {/* Drop set count */}
+              {/* ========== CONFIGURACIONES ESPECÍFICAS ========== */}
+              
+              {/* Drop Set config */}
               {includeDropSet && (
-                <div className="flex items-center gap-2 pt-1">
-                  <Label className="text-[11px] text-gray-400">Drops:</Label>
-                  <div className="flex gap-1.5">
-                    {["1", "2", "3"].map((n) => (
-                      <button
-                        key={n}
-                        onClick={() => setDropSetCount(n)}
-                        className={cn(
-                          "w-9 h-8 rounded-lg text-sm font-medium transition-all",
-                          dropSetCount === n
-                            ? "bg-orange-600 text-white"
-                            : "bg-[#1a1a24] text-gray-400"
-                        )}
-                      >
-                        {n}
-                      </button>
-                    ))}
+                <div className="p-3 rounded-lg bg-orange-950/20 border border-orange-500/30 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Label className="text-[11px] text-orange-400">Cantidad de drops:</Label>
+                    <div className="flex gap-1.5">
+                      {["1", "2", "3"].map((n) => (
+                        <button
+                          key={n}
+                          onClick={() => setDropSetCount(n)}
+                          className={cn(
+                            "w-8 h-7 rounded-lg text-xs font-medium transition-all",
+                            dropSetCount === n
+                              ? "bg-orange-600 text-white"
+                              : "bg-[#1a1a24] text-gray-400"
+                          )}
+                        >
+                          {n}
+                        </button>
+                      ))}
+                    </div>
                   </div>
+                  <p className="text-[10px] text-orange-400/70">Bajar peso ~20% por cada drop</p>
                 </div>
+              )}
+
+              {/* Rest-Pause config */}
+              {includeRestPause && (
+                <div className="p-3 rounded-lg bg-cyan-950/20 border border-cyan-500/30 space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-[10px] text-cyan-400 mb-1 block">Mini-sets:</Label>
+                      <div className="flex gap-1">
+                        {["2", "3", "4"].map((n) => (
+                          <button
+                            key={n}
+                            onClick={() => setRestPauseSets(n)}
+                            className={cn(
+                              "flex-1 h-7 rounded text-xs font-medium transition-all",
+                              restPauseSets === n
+                                ? "bg-cyan-600 text-white"
+                                : "bg-[#1a1a24] text-gray-400"
+                            )}
+                          >
+                            {n}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-cyan-400 mb-1 block">Descanso (seg):</Label>
+                      <Input
+                        value={restPauseRest}
+                        onChange={(e) => setRestPauseRest(e.target.value)}
+                        placeholder="10-15"
+                        className="h-7 text-xs bg-[#1a1a24] border-cyan-500/30 text-white text-center"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-cyan-400/70">Hacer reps hasta fallo, descansar {restPauseRest}s, repetir {restPauseSets} veces</p>
+                </div>
+              )}
+
+              {/* Myo Reps config */}
+              {includeMyoReps && (
+                <div className="p-3 rounded-lg bg-pink-950/20 border border-pink-500/30 space-y-2">
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <Label className="text-[10px] text-pink-400 mb-1 block">Activación:</Label>
+                      <Input
+                        value={myoActivationReps}
+                        onChange={(e) => setMyoActivationReps(e.target.value)}
+                        placeholder="12-15"
+                        className="h-7 text-xs bg-[#1a1a24] border-pink-500/30 text-white text-center"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-pink-400 mb-1 block">Mini-sets:</Label>
+                      <div className="flex gap-1">
+                        {["3", "4", "5"].map((n) => (
+                          <button
+                            key={n}
+                            onClick={() => setMyoMiniSets(n)}
+                            className={cn(
+                              "flex-1 h-7 rounded text-xs font-medium transition-all",
+                              myoMiniSets === n
+                                ? "bg-pink-600 text-white"
+                                : "bg-[#1a1a24] text-gray-400"
+                            )}
+                          >
+                            {n}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-pink-400 mb-1 block">Reps/mini:</Label>
+                      <Input
+                        value={myoMiniReps}
+                        onChange={(e) => setMyoMiniReps(e.target.value)}
+                        placeholder="3-5"
+                        className="h-7 text-xs bg-[#1a1a24] border-pink-500/30 text-white text-center"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-pink-400/70">Activación {myoActivationReps} reps + {myoMiniSets} mini-sets de {myoMiniReps} reps (5-10s descanso)</p>
+                </div>
+              )}
+
+              {/* Isohold config */}
+              {includeIsohold && (
+                <div className="p-3 rounded-lg bg-emerald-950/20 border border-emerald-500/30 space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-[10px] text-emerald-400 mb-1 block">Segundos:</Label>
+                      <Input
+                        value={isoholdSeconds}
+                        onChange={(e) => setIsoholdSeconds(e.target.value)}
+                        placeholder="30"
+                        className="h-7 text-xs bg-[#1a1a24] border-emerald-500/30 text-white text-center"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-emerald-400 mb-1 block">Posición:</Label>
+                      <div className="flex gap-1">
+                        {["abajo", "medio", "arriba"].map((pos) => (
+                          <button
+                            key={pos}
+                            onClick={() => setIsoholdPosition(pos)}
+                            className={cn(
+                              "flex-1 h-7 rounded text-[9px] font-medium transition-all capitalize",
+                              isoholdPosition === pos
+                                ? "bg-emerald-600 text-white"
+                                : "bg-[#1a1a24] text-gray-400"
+                            )}
+                          >
+                            {pos}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-emerald-400/70">Mantener {isoholdSeconds}s en posición {isoholdPosition} antes de las reps</p>
+                </div>
+              )}
+            </div>
+
+            {/* Superserie toggle */}
+            <div className="space-y-2">
+              <button
+                onClick={() => setLinkWithNext(!linkWithNext)}
+                className={cn(
+                  "w-full p-3 rounded-lg flex items-center justify-between transition-all",
+                  linkWithNext
+                    ? "bg-blue-600/20 border border-blue-500/50"
+                    : "bg-[#1a1a24] border border-transparent"
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <Link2 className={cn("w-4 h-4", linkWithNext ? "text-blue-400" : "text-gray-500")} />
+                  <span className="text-xs font-medium text-white">Combinar con siguiente (Superserie)</span>
+                </div>
+                <div className={cn(
+                  "w-10 h-5 rounded-full transition-all relative",
+                  linkWithNext ? "bg-blue-600" : "bg-gray-700"
+                )}>
+                  <div className={cn(
+                    "absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all",
+                    linkWithNext ? "left-5" : "left-0.5"
+                  )} />
+                </div>
+              </button>
+              {linkWithNext && (
+                <p className="text-[10px] text-blue-400/70 px-1">
+                  Este ejercicio se mostrará combinado con el siguiente para el alumno
+                </p>
               )}
             </div>
 

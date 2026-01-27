@@ -19,6 +19,7 @@ import {
   Plus,
   Search,
   Sparkles,
+  User,
   X,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -42,6 +43,12 @@ interface FoodItem {
   protein: number;
   carbs: number;
   fat: number;
+  // Campos de origen del alimento
+  source?: 'base_library' | 'student_custom' | 'coach_assigned' | null;
+  isCustom?: boolean;
+  isBaseLibrary?: boolean;
+  isCoachAssigned?: boolean;
+  isFromCoach?: boolean;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -64,6 +71,12 @@ const transformFoodItem = (item: any): FoodItem => {
     protein: Math.round((parseFloat(item.proteinPer100g) || 0) * multiplier * 10) / 10,
     carbs: Math.round((parseFloat(item.carbsPer100g) || 0) * multiplier * 10) / 10,
     fat: Math.round((parseFloat(item.fatPer100g) || 0) * multiplier * 10) / 10,
+    // Campos de origen
+    source: item.source,
+    isCustom: item.isCustom,
+    isBaseLibrary: item.isBaseLibrary,
+    isCoachAssigned: item.isCoachAssigned,
+    isFromCoach: item.isFromCoach,
   };
 };
 
@@ -492,12 +505,31 @@ export default function AddFoodPage() {
                         key={food.id}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="p-4 bg-surface/80 rounded-xl border border-border cursor-pointer hover:border-primary/50 transition-colors"
+                        className={cn(
+                          "p-4 bg-surface/80 rounded-xl border cursor-pointer hover:border-primary/50 transition-colors",
+                          food.isCustom ? "border-green-500/40" : 
+                          (food.isCoachAssigned || food.isFromCoach) ? "border-purple-500/40" : 
+                          "border-border"
+                        )}
                         onClick={() => handleSelectFood(food)}
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium text-text truncate">{food.name}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-text truncate">{food.name}</p>
+                              {food.isCustom && (
+                                <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-medium bg-green-500/20 text-green-400 rounded-full flex items-center gap-1">
+                                  <Sparkles className="w-3 h-3" />
+                                  Tuyo
+                                </span>
+                              )}
+                              {(food.isCoachAssigned || food.isFromCoach) && (
+                                <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-medium bg-purple-500/20 text-purple-400 rounded-full flex items-center gap-1">
+                                  <User className="w-3 h-3" />
+                                  Coach
+                                </span>
+                              )}
+                            </div>
                             <p className="text-sm text-text-muted">
                               {food.servingSize}g · <span className="text-orange-400">{food.calories} kcal</span>
                             </p>
@@ -626,12 +658,31 @@ export default function AddFoodPage() {
                         key={food.id}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="p-4 bg-surface/80 rounded-xl border border-border cursor-pointer hover:border-primary/50 transition-colors"
+                        className={cn(
+                          "p-4 bg-surface/80 rounded-xl border cursor-pointer hover:border-primary/50 transition-colors",
+                          food.isCustom ? "border-green-500/40" : 
+                          (food.isCoachAssigned || food.isFromCoach) ? "border-purple-500/40" : 
+                          "border-border"
+                        )}
                         onClick={() => handleSelectFood(food)}
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium text-text truncate">{food.name}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-text truncate">{food.name}</p>
+                              {food.isCustom && (
+                                <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-medium bg-green-500/20 text-green-400 rounded-full flex items-center gap-1">
+                                  <Sparkles className="w-3 h-3" />
+                                  Tuyo
+                                </span>
+                              )}
+                              {(food.isCoachAssigned || food.isFromCoach) && (
+                                <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-medium bg-purple-500/20 text-purple-400 rounded-full flex items-center gap-1">
+                                  <User className="w-3 h-3" />
+                                  Coach
+                                </span>
+                              )}
+                            </div>
                             <p className="text-sm text-text-muted">
                               {food.servingSize}g · <span className="text-orange-400">{food.calories} kcal</span>
                             </p>

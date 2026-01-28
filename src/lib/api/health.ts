@@ -84,12 +84,14 @@ export interface AnthropometryInput {
   perimetroMusloMedial?: number;
   perimetroPantorrilla?: number;
   // Pliegues (mm)
-  plieguePantorrilla?: number;
   pliegueTriceps?: number;
+  pliegueBiceps?: number;
   pliegueSubescapular?: number;
+  pliegueCrestaIliaca?: number;
   pliegueSupraespinal?: number;
   pliegueAbdominal?: number;
   pliegueMusloMedial?: number;
+  plieguePantorrilla?: number;
   // Fotos (URLs o base64 para upload)
   photoFront?: string;
   photoSide?: string;
@@ -106,7 +108,8 @@ export interface Anthropometry extends AnthropometryInput {
   id: number;
   studentId?: number;
   // Valores calculados
-  sumaPliegues?: number;
+  sumaPliegues6?: number;
+  sumaPliegues8?: number;
   porcentajeGrasa?: number;
   porcentajeMuscular?: number;
   masaGrasaKg?: number;

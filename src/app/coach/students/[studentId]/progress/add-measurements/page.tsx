@@ -100,7 +100,9 @@ const initialPerimetros = {
 
 const initialPliegues = {
   triceps: "",
+  biceps: "",
   subescapular: "",
+  crestaIliaca: "",
   supraespinal: "",
   abdominal: "",
   musloMedial: "",
@@ -192,7 +194,9 @@ export default function CoachAddMeasurementsPage() {
           });
           setPliegues({
             triceps: data.pliegueTriceps?.toString() || "",
+            biceps: (data as any).pliegueBiceps?.toString() || "",
             subescapular: data.pliegueSubescapular?.toString() || "",
+            crestaIliaca: (data as any).pliegueCrestaIliaca?.toString() || "",
             supraespinal: data.pliegueSupraespinal?.toString() || "",
             abdominal: data.pliegueAbdominal?.toString() || "",
             musloMedial: data.pliegueMusloMedial?.toString() || "",
@@ -236,8 +240,10 @@ export default function CoachAddMeasurementsPage() {
 
   const [photoMenuOpen, setPhotoMenuOpen] = useState<PhotoType | null>(null);
 
-  const sumaPliegues = useMemo(() => {
-    const valores = [
+  // Calcular suma de pliegues (Σ6 y Σ8)
+  const sumasPliegues = useMemo(() => {
+    // Σ6: Los 6 pliegues clásicos
+    const valores6 = [
       pliegues.triceps,
       pliegues.subescapular,
       pliegues.supraespinal,
@@ -248,7 +254,26 @@ export default function CoachAddMeasurementsPage() {
       .map((v) => parseFloat(v) || 0)
       .filter((v) => v > 0);
 
-    return valores.length > 0 ? valores.reduce((a, b) => a + b, 0) : null;
+    // Σ8: Los 8 pliegues (incluye bíceps y cresta ilíaca)
+    const valores8 = [
+      pliegues.triceps,
+      pliegues.biceps,
+      pliegues.subescapular,
+      pliegues.crestaIliaca,
+      pliegues.supraespinal,
+      pliegues.abdominal,
+      pliegues.musloMedial,
+      pliegues.pantorrilla,
+    ]
+      .map((v) => parseFloat(v) || 0)
+      .filter((v) => v > 0);
+
+    return {
+      suma6: valores6.length > 0 ? valores6.reduce((a, b) => a + b, 0) : null,
+      suma8: valores8.length > 0 ? valores8.reduce((a, b) => a + b, 0) : null,
+      count6: valores6.length,
+      count8: valores8.length,
+    };
   }, [pliegues]);
 
   const handlePhotoSelect = (type: PhotoType, e: React.ChangeEvent<HTMLInputElement>) => {
@@ -641,6 +666,12 @@ export default function CoachAddMeasurementsPage() {
 
           {/* Tab Perímetros */}
           <TabsContent value="perimetros" className="mt-4 space-y-4">
+            {/* Título de sección */}
+            <div className="flex items-center gap-2 px-1">
+              <Ruler className="w-5 h-5 text-cyan-400" />
+              <h2 className="text-lg font-semibold text-text">Perímetros</h2>
+            </div>
+
             <Card className="bg-surface/80 border-border">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-cyan-400">Tren Superior</CardTitle>
@@ -673,7 +704,7 @@ export default function CoachAddMeasurementsPage() {
 
             <Card className="bg-surface/80 border-border">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-cyan-400">Core</CardTitle>
+                <CardTitle className="text-sm text-cyan-400">Zona Media</CardTitle>
               </CardHeader>
               <CardContent className="p-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -721,7 +752,7 @@ export default function CoachAddMeasurementsPage() {
           <TabsContent value="pliegues" className="mt-4 space-y-4">
             <Card className="bg-surface/80 border-border">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-orange-400">Pliegues Cutáneos (6 sitios)</CardTitle>
+                <CardTitle className="text-sm text-orange-400">Pliegues Cutáneos (8 sitios)</CardTitle>
                 <p className="text-xs text-text-muted">
                   Medidos con plicómetro - Para cálculo de % grasa
                 </p>
@@ -735,9 +766,21 @@ export default function CoachAddMeasurementsPage() {
                     unit="mm"
                   />
                   <MeasureInput
+                    label="Bíceps"
+                    value={pliegues.biceps}
+                    onChange={(v) => setPliegues((p) => ({ ...p, biceps: v }))}
+                    unit="mm"
+                  />
+                  <MeasureInput
                     label="Subescapular"
                     value={pliegues.subescapular}
                     onChange={(v) => setPliegues((p) => ({ ...p, subescapular: v }))}
+                    unit="mm"
+                  />
+                  <MeasureInput
+                    label="Cresta ilíaca"
+                    value={pliegues.crestaIliaca}
+                    onChange={(v) => setPliegues((p) => ({ ...p, crestaIliaca: v }))}
                     unit="mm"
                   />
                   <MeasureInput
@@ -768,12 +811,22 @@ export default function CoachAddMeasurementsPage() {
               </CardContent>
             </Card>
 
-            {sumaPliegues !== null && (
+            {(sumasPliegues.suma6 !== null || sumasPliegues.suma8 !== null) && (
               <Card className="bg-orange-500/10 border-orange-500/30">
                 <CardContent className="p-4">
-                  <div className="text-center p-3 rounded-lg bg-background/50">
-                    <p className="text-2xl font-bold text-orange-400">{sumaPliegues.toFixed(1)} mm</p>
-                    <p className="text-xs text-text-muted">Suma de pliegues (Σ6)</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    {sumasPliegues.suma6 !== null && (
+                      <div className="text-center p-3 rounded-lg bg-background/50">
+                        <p className="text-2xl font-bold text-orange-400">{sumasPliegues.suma6.toFixed(1)} mm</p>
+                        <p className="text-xs text-text-muted">Σ6 pliegues</p>
+                      </div>
+                    )}
+                    {sumasPliegues.suma8 !== null && sumasPliegues.count8 > sumasPliegues.count6 && (
+                      <div className="text-center p-3 rounded-lg bg-background/50">
+                        <p className="text-2xl font-bold text-orange-300">{sumasPliegues.suma8.toFixed(1)} mm</p>
+                        <p className="text-xs text-text-muted">Σ8 pliegues</p>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>

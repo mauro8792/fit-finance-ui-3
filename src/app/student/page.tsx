@@ -166,10 +166,10 @@ export default function StudentDashboard() {
     today.setHours(0, 0, 0, 0);
     
     // Ordenar días por día si existe
-    // Ordenar días - usar 'order' para V2 (StudentDay) o 'dia' para V1 (Day)
+    // Ordenar días - usar 'dayNumber' para V2 (StudentDay) o 'dia' para V1 (Day)
     const sortedDays = [...(currentMicro.days || [])].sort((a, b) => {
-      const orderA: number = 'order' in a ? (a.order as number) : ('dia' in a ? (a.dia as number) : 0);
-      const orderB: number = 'order' in b ? (b.order as number) : ('dia' in b ? (b.dia as number) : 0);
+      const orderA: number = 'dayNumber' in a ? (a.dayNumber as number) : ('dia' in a ? (a.dia as number) : 0);
+      const orderB: number = 'dayNumber' in b ? (b.dayNumber as number) : ('dia' in b ? (b.dia as number) : 0);
       return orderA - orderB;
     });
     
@@ -179,9 +179,9 @@ export default function StudentDashboard() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const allSets: any[] = day.exercises?.flatMap((ex: any) => ex.sets || []) || [];
       const dayTotalSets = allSets.length;
-      // V2 usa isCompleted, V1 usa status === "completed"
+      // V2 usa isCompleted o completedAt (ambos indican completado), V1 usa status === "completed"
       const completedSetsList = allSets.filter(s => 
-        ('isCompleted' in s ? s.isCompleted : s.status === "completed")
+        ('isCompleted' in s ? (s.isCompleted || s.completedAt) : s.status === "completed")
       );
       const dayCompletedSets = completedSetsList.length;
       
@@ -251,19 +251,19 @@ export default function StudentDashboard() {
         const micro = allMicros[microIdx];
         if (!micro) continue;
         
-        // Ordenar días - usar 'order' para V2 (StudentDay) o 'dia' para V1 (Day)
+        // Ordenar días - usar 'dayNumber' para V2 (StudentDay) o 'dia' para V1 (Day)
         const prevDays = [...(micro.days || [])].sort((a, b) => {
-          const orderA: number = 'order' in a ? (a.order as number) : ('dia' in a ? (a.dia as number) : 0);
-          const orderB: number = 'order' in b ? (b.order as number) : ('dia' in b ? (b.dia as number) : 0);
+          const orderA: number = 'dayNumber' in a ? (a.dayNumber as number) : ('dia' in a ? (a.dia as number) : 0);
+          const orderB: number = 'dayNumber' in b ? (b.dayNumber as number) : ('dia' in b ? (b.dia as number) : 0);
           return orderA - orderB;
         });
         let found = false;
         
         for (let i = prevDays.length - 1; i >= 0; i--) {
           const day = prevDays[i];
-          // V2 usa isCompleted, V1 usa status === "completed"
+          // V2 usa isCompleted o completedAt, V1 usa status === "completed"
           const hasCompletedSets = day.exercises?.some(ex => 
-            ex.sets?.some(s => ('isCompleted' in s ? s.isCompleted : s.status === "completed"))
+            ex.sets?.some(s => ('isCompleted' in s ? (s.isCompleted || s.completedAt) : s.status === "completed"))
           );
           if (hasCompletedSets) {
             const dayNumber = i + 1;
@@ -287,42 +287,25 @@ export default function StudentDashboard() {
       }
     }
     
-    // Próximo entreno: depende de si el último día trabajado fue hoy o antes
-    const lastWorkedToday = lastWorkedDate !== null && lastWorkedDate.getTime() >= today.getTime();
+    // Próximo entreno: siempre es el siguiente día después del último trabajado
+    // NO volvemos atrás a días anteriores incompletos
     let nextMicroIndex = selectedMicroIndex; // Por defecto, mismo micro
     
-    if (lastWorkedToday && lastWorkedDayIndex >= 0) {
-      // Si se trabajó hoy, el próximo es SIEMPRE el siguiente día
-      // (independientemente de si completó todos los sets del día actual)
-      // El usuario ya entrenó hoy, mañana va por el siguiente día
-      for (let i = lastWorkedDayIndex + 1; i < daysStatus.length; i++) {
-        if (daysStatus[i].hasSets && !daysStatus[i].isCompleted) {
-          nextWorkout = daysStatus[i].dayName;
-          break;
-        }
+    // Buscar el siguiente día con ejercicios después del último trabajado
+    const nextDayIndex = lastWorkedDayIndex >= 0 ? lastWorkedDayIndex + 1 : 0;
+    
+    // Buscar el próximo día con sets (sin importar si está completo)
+    for (let i = nextDayIndex; i < daysStatus.length; i++) {
+      if (daysStatus[i].hasSets) {
+        nextWorkout = daysStatus[i].dayName;
+        break;
       }
-      // Si no hay más días en este micro, pasar al siguiente
-      if (!nextWorkout) {
-        nextMicroIndex = selectedMicroIndex + 1;
-        nextWorkout = "Día 1"; // Primer día del siguiente micro
-      }
-    } else {
-      // Si se trabajó antes de hoy (o nunca), el próximo es el siguiente día en orden
-      const nextDayIndex = lastWorkedDayIndex >= 0 ? lastWorkedDayIndex + 1 : 0;
-      
-      // Buscar desde el siguiente día
-      for (let i = nextDayIndex; i < daysStatus.length; i++) {
-        if (daysStatus[i].hasSets) {
-          nextWorkout = daysStatus[i].dayName;
-          break;
-        }
-      }
-      
-      // Si llegamos al final del micro, pasar al siguiente
-      if (!nextWorkout) {
-        nextMicroIndex = selectedMicroIndex + 1;
-        nextWorkout = "Día 1"; // Primer día del siguiente micro
-      }
+    }
+    
+    // Si no hay más días en este micro, pasar al siguiente
+    if (!nextWorkout) {
+      nextMicroIndex = selectedMicroIndex + 1;
+      nextWorkout = "Día 1"; // Primer día del siguiente micro
     }
     
     // Verificar si el siguiente micro existe
@@ -408,7 +391,7 @@ export default function StudentDashboard() {
             className="w-full h-14 bg-gradient-to-r from-primary to-primary-hover hover:opacity-90 text-black font-semibold text-base shadow-lg shadow-primary/20"
           >
             <Plus className="w-5 h-5 mr-2" />
-            Registrar Peso / Pasos
+            Registrar Peso / Pasos / Sueño
           </Button>
         </motion.div>
 
@@ -536,7 +519,7 @@ export default function StudentDashboard() {
           <motion.div>
             <Card
               className="bg-gradient-to-br from-primary/20 to-accent/10 border-primary/40 cursor-pointer touch-feedback overflow-hidden"
-              onClick={() => router.push(`/student/routine?micro=${activeMicro.nextMicroIndex}`)}
+              onClick={() => router.push(`/student/routine?micro=${activeMicro.isNextMicroDifferent ? activeMicro.nextMicroIndex : activeMicro.microIndex}`)}
             >
               <CardContent className="p-4">
                 <div className="flex items-center gap-4">
@@ -545,9 +528,9 @@ export default function StudentDashboard() {
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-bold text-text">Microciclo {activeMicro.nextMicroIndex + 1}</h3>
+                      <h3 className="font-bold text-text">Microciclo {activeMicro.microIndex + 1}</h3>
                       <Badge className="bg-primary/20 text-primary text-xs">
-                        {activeMicro.isNextMicroDifferent ? "Siguiente" : "En curso"}
+                        {activeMicro.completedSets === activeMicro.totalSets && activeMicro.totalSets > 0 ? "Completado" : "En curso"}
                       </Badge>
                     </div>
                     <p className="text-sm text-text-muted">{activeMicro.mesoName}</p>
@@ -557,7 +540,10 @@ export default function StudentDashboard() {
                       {activeMicro.nextWorkout && (
                         <div>
                           <span className="text-text-muted">Próximo: </span>
-                          <span className="text-primary font-medium">{activeMicro.nextWorkout}</span>
+                          <span className="text-primary font-medium">
+                            {activeMicro.nextWorkout}
+                            {activeMicro.isNextMicroDifferent && ` - M${activeMicro.nextMicroIndex + 1}`}
+                          </span>
                         </div>
                       )}
                       {activeMicro.lastWorkout && (
@@ -565,7 +551,7 @@ export default function StudentDashboard() {
                           <span className="text-text-muted">Último: </span>
                           <span className="text-text-secondary">
                             {activeMicro.lastWorkout}
-                            {activeMicro.lastWorkoutMicroIndex !== activeMicro.nextMicroIndex && ` - M${activeMicro.lastWorkoutMicroIndex + 1}`}
+                            {activeMicro.lastWorkoutMicroIndex !== activeMicro.microIndex && ` - M${activeMicro.lastWorkoutMicroIndex + 1}`}
                           </span>
                         </div>
                       )}

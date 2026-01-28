@@ -91,15 +91,45 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
           const sortedMicros = activeV2.microcycles?.slice().sort((a: any, b: any) => a.order - b.order) || [];
           activeV2.microcycles = sortedMicros;
           
-          // Determinar índice inicial
+          // Determinar índice inicial - buscar el microciclo con progreso más reciente
           let microIndex = 0;
-          const savedIndex = localStorage.getItem("activeMicrocycleIndex");
-          if (savedIndex !== null) {
-            const idx = parseInt(savedIndex);
-            if (idx >= 0 && idx < sortedMicros.length) {
-              microIndex = idx;
+          let mostRecentMicroIndex = -1;
+          let mostRecentDate: Date | null = null;
+          
+          // Buscar en todos los microciclos para encontrar el que tenga el set completado más reciente
+          sortedMicros.forEach((micro: any, idx: number) => {
+            micro.days?.forEach((day: any) => {
+              day.exercises?.forEach((ex: any) => {
+                ex.sets?.forEach((s: any) => {
+                  if (s.completedAt || s.isCompleted) {
+                    const completedDate = s.completedAt ? new Date(s.completedAt) : null;
+                    if (completedDate && (!mostRecentDate || completedDate > mostRecentDate)) {
+                      mostRecentDate = completedDate;
+                      mostRecentMicroIndex = idx;
+                    }
+                  }
+                });
+              });
+            });
+          });
+          
+          // Usar el microciclo con progreso más reciente si se encontró
+          if (mostRecentMicroIndex >= 0) {
+            microIndex = mostRecentMicroIndex;
+            console.log("[RoutineStore] Auto-detected active microcycle:", microIndex + 1, "based on recent progress");
+          } else {
+            // Fallback: usar localStorage si no hay progreso
+            const savedIndex = localStorage.getItem("activeMicrocycleIndex");
+            if (savedIndex !== null) {
+              const idx = parseInt(savedIndex);
+              if (idx >= 0 && idx < sortedMicros.length) {
+                microIndex = idx;
+              }
             }
           }
+          
+          // Actualizar localStorage con el microciclo detectado
+          localStorage.setItem("activeMicrocycleIndex", microIndex.toString());
           
           set({
             routineV2: activeV2,

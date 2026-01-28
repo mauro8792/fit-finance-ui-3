@@ -52,8 +52,32 @@ export const getWeightStats = async (studentId: number) => {
   return data;
 };
 
-export const getWeightWeeklyStats = async (studentId: number) => {
-  const { data } = await api.get(`/health/weight/${studentId}/weekly-stats`);
+export interface WeightWeeklyStats {
+  hasData: boolean;
+  weeks: Array<{
+    weekNumber: number;
+    weekStart: string;
+    weekEnd: string;
+    averageWeight: number;
+    minWeight: number;
+    maxWeight: number;
+    recordCount: number;
+    variationGrams: number | null;
+    variationPercent: number | null;
+  }>;
+  summary: {
+    totalRecords: number;
+    totalWeeks: number;
+    currentWeight: number;
+    initialWeight: number;
+    totalChange: number | null;
+    totalChangePercent: number | null;
+    avgWeeklyChange: number | null;
+  };
+}
+
+export const getWeightWeeklyStats = async (studentId: number, weeks = 12): Promise<WeightWeeklyStats> => {
+  const { data } = await api.get(`/health/weight/${studentId}/weekly-stats?weeks=${weeks}`);
   return data;
 };
 
@@ -84,12 +108,14 @@ export interface AnthropometryInput {
   perimetroMusloMedial?: number;
   perimetroPantorrilla?: number;
   // Pliegues (mm)
-  plieguePantorrilla?: number;
   pliegueTriceps?: number;
+  pliegueBiceps?: number;
   pliegueSubescapular?: number;
+  pliegueCrestaIliaca?: number;
   pliegueSupraespinal?: number;
   pliegueAbdominal?: number;
   pliegueMusloMedial?: number;
+  plieguePantorrilla?: number;
   // Fotos (URLs o base64 para upload)
   photoFront?: string;
   photoSide?: string;
@@ -106,7 +132,8 @@ export interface Anthropometry extends AnthropometryInput {
   id: number;
   studentId?: number;
   // Valores calculados
-  sumaPliegues?: number;
+  sumaPliegues6?: number;
+  sumaPliegues8?: number;
   porcentajeGrasa?: number;
   porcentajeMuscular?: number;
   masaGrasaKg?: number;
@@ -229,5 +256,99 @@ export const getMockAnthropometryHistory = (): any[] => {
 export const getHealthDashboard = async (studentId: number) => {
   const { data } = await api.get(`/health/dashboard/${studentId}`);
   return data;
+};
+
+// ========== SLEEP ==========
+
+export type SleepQuality = 'PLENO' | 'ENTRECORTADO' | 'DIFICULTAD_DORMIR';
+
+export interface SleepLogInput {
+  date: string;
+  sleepHours: number;
+  sleepMinutes: number;
+  bedtime?: string;
+  quality?: SleepQuality;
+  notes?: string;
+}
+
+export interface SleepLog {
+  id: number;
+  date: string;
+  sleepHours: number;
+  sleepMinutes: number;
+  displayFormat: string;
+  hoursDecimal?: number;
+  bedtime?: string;
+  quality: SleepQuality;
+  notes?: string;
+}
+
+export interface SleepWeeklyStats {
+  hasData: boolean;
+  weeks: Array<{
+    weekNumber: number;
+    weekStart: string;
+    weekEnd: string;
+    averageHours: number;
+    averageMinutes: number;
+    averageHoursDecimal: number;
+    displayFormat: string;
+    daysWithData: number;
+    qualityBreakdown: {
+      pleno: number;
+      entrecortado: number;
+      dificultad: number;
+    };
+    color: string;
+  }>;
+  summary: {
+    totalRecords: number;
+    totalWeeks: number;
+    currentAverage: number | null;
+    overallAverage: number | null;
+  };
+}
+
+export const getSleepLogs = async (studentId: number, limit = 30): Promise<SleepLog[]> => {
+  const { data } = await api.get(`/health/sleep/${studentId}?limit=${limit}`);
+  return data;
+};
+
+export const addSleepLog = async (studentId: number, sleepData: SleepLogInput): Promise<SleepLog> => {
+  const { data } = await api.post(`/health/sleep/${studentId}`, sleepData);
+  return data;
+};
+
+export const updateSleepLog = async (id: number, sleepData: Partial<SleepLogInput>): Promise<SleepLog> => {
+  const { data } = await api.put(`/health/sleep/${id}`, sleepData);
+  return data;
+};
+
+export const deleteSleepLog = async (id: number) => {
+  const { data } = await api.delete(`/health/sleep/${id}`);
+  return data;
+};
+
+export const getSleepWeeklyStats = async (studentId: number, weeks = 12): Promise<SleepWeeklyStats> => {
+  const { data } = await api.get(`/health/sleep/${studentId}/weekly-stats?weeks=${weeks}`);
+  return data;
+};
+
+// Helper para obtener el color según las horas de sueño
+export const getSleepColor = (hoursDecimal: number): string => {
+  if (hoursDecimal >= 8) return '#22c55e'; // Verde oscuro
+  if (hoursDecimal >= 7) return '#4ade80'; // Verde claro
+  if (hoursDecimal >= 6) return '#eab308'; // Amarillo
+  if (hoursDecimal >= 5) return '#f97316'; // Naranja
+  return '#ef4444'; // Rojo
+};
+
+// Helper para obtener el label del color
+export const getSleepColorLabel = (hoursDecimal: number): string => {
+  if (hoursDecimal >= 8) return 'Óptimo';
+  if (hoursDecimal >= 7) return 'Bien';
+  if (hoursDecimal >= 6) return 'Medio';
+  if (hoursDecimal >= 5) return 'Bajo';
+  return 'Déficit';
 };
 

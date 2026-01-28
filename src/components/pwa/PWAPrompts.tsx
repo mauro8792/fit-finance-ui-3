@@ -5,14 +5,14 @@ import { motion, AnimatePresence } from "framer-motion";
 import { usePWA } from "@/hooks/usePWA";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Download, RefreshCw, X, Smartphone, Sparkles } from "lucide-react";
+import { Download, RefreshCw, X, Smartphone, Sparkles, Share, PlusSquare } from "lucide-react";
 
 // Storage key for dismissal
 const INSTALL_DISMISSED_KEY = "pwa-install-dismissed";
 const DISMISS_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 export function PWAPrompts() {
-  const { canInstall, promptInstall, hasUpdate, applyUpdate, isInstalled } = usePWA();
+  const { canInstall, promptInstall, hasUpdate, applyUpdate, isInstalled, isIOSSafari } = usePWA();
   const [showInstall, setShowInstall] = useState(false);
   const [showUpdate, setShowUpdate] = useState(false);
 
@@ -81,17 +81,50 @@ export function PWAPrompts() {
                       Instalar BraCamp
                       <Sparkles className="w-4 h-4 text-primary" />
                     </h3>
-                    <p className="text-sm text-text-muted mt-1">
-                      Agregá la app a tu pantalla de inicio para acceso rápido
-                    </p>
                     
-                    <Button
-                      onClick={handleInstall}
-                      className="mt-3 w-full bg-primary hover:bg-primary-hover text-black font-medium"
-                    >
-                      <Download className="w-4 h-4 mr-2" />
-                      Instalar ahora
-                    </Button>
+                    {isIOSSafari ? (
+                      // Instrucciones específicas para iOS Safari
+                      <>
+                        <p className="text-sm text-text-muted mt-1">
+                          Agregá la app a tu pantalla de inicio:
+                        </p>
+                        <div className="mt-3 space-y-2 text-sm">
+                          <div className="flex items-center gap-2 text-text-muted">
+                            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/20 text-primary text-xs font-bold">1</span>
+                            <span className="flex items-center gap-1">
+                              Tocá el ícono <Share className="w-4 h-4 text-primary inline" /> de compartir
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-text-muted">
+                            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/20 text-primary text-xs font-bold">2</span>
+                            <span className="flex items-center gap-1">
+                              Seleccioná <PlusSquare className="w-4 h-4 text-primary inline" /> &quot;Agregar a inicio&quot;
+                            </span>
+                          </div>
+                        </div>
+                        <Button
+                          onClick={handleDismissInstall}
+                          variant="outline"
+                          className="mt-3 w-full border-primary/30 text-text"
+                        >
+                          Entendido
+                        </Button>
+                      </>
+                    ) : (
+                      // Botón normal para Android/Chrome
+                      <>
+                        <p className="text-sm text-text-muted mt-1">
+                          Agregá la app a tu pantalla de inicio para acceso rápido
+                        </p>
+                        <Button
+                          onClick={handleInstall}
+                          className="mt-3 w-full bg-primary hover:bg-primary-hover text-black font-medium"
+                        >
+                          <Download className="w-4 h-4 mr-2" />
+                          Instalar ahora
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               </CardContent>

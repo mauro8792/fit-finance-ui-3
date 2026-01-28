@@ -13,6 +13,10 @@ interface UsePWAReturn {
   isInstalled: boolean;
   promptInstall: () => Promise<boolean>;
   
+  // iOS specific
+  isIOS: boolean;
+  isIOSSafari: boolean;
+  
   // Update handling
   hasUpdate: boolean;
   updateVersion: string | null;
@@ -30,8 +34,10 @@ export function usePWA(): UsePWAReturn {
   const [updateVersion, setUpdateVersion] = useState<string | null>(null);
   const [swRegistration, setSwRegistration] = useState<ServiceWorkerRegistration | null>(null);
   const [isOnline, setIsOnline] = useState(true);
+  const [isIOS, setIsIOS] = useState(false);
+  const [isIOSSafari, setIsIOSSafari] = useState(false);
 
-  // Check if already installed
+  // Check if already installed and detect iOS
   useEffect(() => {
     if (typeof window !== "undefined") {
       // Check if running as standalone PWA
@@ -39,6 +45,21 @@ export function usePWA(): UsePWAReturn {
         || (window.navigator as any).standalone === true;
       setIsInstalled(isStandalone);
       setIsOnline(navigator.onLine);
+
+      // Detect iOS
+      const userAgent = window.navigator.userAgent.toLowerCase();
+      const isIOSDevice = /iphone|ipad|ipod/.test(userAgent);
+      setIsIOS(isIOSDevice);
+
+      // Detect iOS Safari (not Chrome, Firefox, etc on iOS)
+      // Safari on iOS doesn't include "CriOS" (Chrome), "FxiOS" (Firefox), or "EdgiOS" (Edge)
+      const isSafari = isIOSDevice && 
+        !userAgent.includes("crios") && 
+        !userAgent.includes("fxios") && 
+        !userAgent.includes("edgios") &&
+        !userAgent.includes("opios") &&
+        (userAgent.includes("safari") || !userAgent.includes("chrome"));
+      setIsIOSSafari(isSafari);
     }
   }, []);
 
@@ -166,9 +187,12 @@ export function usePWA(): UsePWAReturn {
   }, [swRegistration]);
 
   return {
-    canInstall: !!deferredPrompt && !isInstalled,
+    // En iOS Safari no hay beforeinstallprompt, pero podemos mostrar instrucciones
+    canInstall: (!!deferredPrompt || isIOSSafari) && !isInstalled,
     isInstalled,
     promptInstall,
+    isIOS,
+    isIOSSafari,
     hasUpdate,
     updateVersion,
     applyUpdate,

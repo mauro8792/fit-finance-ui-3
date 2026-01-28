@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/auth-store";
 import { Loader2 } from "lucide-react";
+import Image from "next/image";
 
 export default function Home() {
   const router = useRouter();
@@ -46,8 +47,15 @@ export default function Home() {
     <div className="min-h-screen flex flex-col items-center justify-center bg-background">
       <div className="flex flex-col items-center gap-4 animate-fade-in">
         {/* Logo */}
-        <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary to-primary-hover flex items-center justify-center shadow-lg shadow-primary/20">
-          <span className="text-4xl font-bold text-black">F</span>
+        <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-primary to-primary-hover flex items-center justify-center shadow-lg shadow-primary/20">
+          <Image
+            src="/icons/gorila.png"
+            alt="BraCamp"
+            width={64}
+            height={64}
+            className="object-contain"
+            priority
+          />
         </div>
         
         {/* Loading */}

@@ -391,7 +391,7 @@ export default function StudentDashboard() {
             className="w-full h-14 bg-gradient-to-r from-primary to-primary-hover hover:opacity-90 text-black font-semibold text-base shadow-lg shadow-primary/20"
           >
             <Plus className="w-5 h-5 mr-2" />
-            Registrar Peso / Pasos
+            Registrar Peso / Pasos / Sueño
           </Button>
         </motion.div>
 

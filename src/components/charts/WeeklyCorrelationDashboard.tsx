@@ -14,6 +14,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   ReferenceLine,
+  Cell,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,10 +33,11 @@ import {
   Lightbulb,
   BarChart3,
   LineChart as LineChartIcon,
+  Moon,
 } from "lucide-react";
 import api from "@/lib/api";
 import { cn, formatDate } from "@/lib/utils";
-import { getWeightWeeklyStats, type WeightWeeklyStats } from "@/lib/api/health";
+import { getWeightWeeklyStats, type WeightWeeklyStats, getSleepWeeklyStats, type SleepWeeklyStats } from "@/lib/api/health";
 import { getStepsWeeklyHistoryStats, type StepsWeeklyHistoryStats } from "@/lib/api/cardio";
 import { getCaloriesWeeklyStats, type CaloriesWeeklyStats } from "@/lib/api/nutrition";
 
@@ -93,6 +95,7 @@ export function WeeklyCorrelationDashboard({ studentId, className }: Props) {
   const [weightHistory, setWeightHistory] = useState<WeightWeeklyStats | null>(null);
   const [stepsHistory, setStepsHistory] = useState<StepsWeeklyHistoryStats | null>(null);
   const [caloriesHistory, setCaloriesHistory] = useState<CaloriesWeeklyStats | null>(null);
+  const [sleepHistory, setSleepHistory] = useState<SleepWeeklyStats | null>(null);
   const [historyWeeks, setHistoryWeeks] = useState(8); // Default 8 semanas
   
   // Datos de la semana seleccionada
@@ -285,15 +288,17 @@ export function WeeklyCorrelationDashboard({ studentId, className }: Props) {
     const fetchHistoryStats = async () => {
       setLoadingHistory(true);
       try {
-        const [weightRes, stepsRes, caloriesRes] = await Promise.all([
+        const [weightRes, stepsRes, caloriesRes, sleepRes] = await Promise.all([
           getWeightWeeklyStats(studentId, historyWeeks).catch(() => null),
           getStepsWeeklyHistoryStats(studentId, historyWeeks).catch(() => null),
           getCaloriesWeeklyStats(studentId, historyWeeks).catch(() => null),
+          getSleepWeeklyStats(studentId, historyWeeks).catch(() => null),
         ]);
         
         setWeightHistory(weightRes);
         setStepsHistory(stepsRes);
         setCaloriesHistory(caloriesRes);
+        setSleepHistory(sleepRes);
       } catch (error) {
         console.error("Error fetching history stats:", error);
       } finally {
@@ -1002,15 +1007,91 @@ export function WeeklyCorrelationDashboard({ studentId, className }: Props) {
             </div>
           )}
 
+          {/* Gráfico de Sueño Promedio Semanal */}
+          {sleepHistory?.hasData && sleepHistory.weeks.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-text-muted flex items-center gap-1">
+                  <Moon className="w-3 h-3 text-indigo-400" />
+                  Sueño promedio semanal
+                </span>
+                <div className="flex items-center gap-1 text-[8px]">
+                  <span className="flex items-center gap-0.5">
+                    <div className="w-1.5 h-1.5 rounded-sm bg-green-500" />
+                    <span className="text-text-muted">8h+</span>
+                  </span>
+                  <span className="flex items-center gap-0.5">
+                    <div className="w-1.5 h-1.5 rounded-sm bg-green-400" />
+                    <span className="text-text-muted">7h</span>
+                  </span>
+                  <span className="flex items-center gap-0.5">
+                    <div className="w-1.5 h-1.5 rounded-sm bg-yellow-500" />
+                    <span className="text-text-muted">6h</span>
+                  </span>
+                  <span className="flex items-center gap-0.5">
+                    <div className="w-1.5 h-1.5 rounded-sm bg-orange-500" />
+                    <span className="text-text-muted">5h</span>
+                  </span>
+                  <span className="flex items-center gap-0.5">
+                    <div className="w-1.5 h-1.5 rounded-sm bg-red-500" />
+                    <span className="text-text-muted">&lt;5h</span>
+                  </span>
+                </div>
+              </div>
+              <ResponsiveContainer width="100%" height={120}>
+                <BarChart
+                  data={sleepHistory.weeks.map((w) => ({
+                    name: `S${w.weekNumber}`,
+                    value: w.averageHoursDecimal,
+                    display: w.displayFormat,
+                    label: formatDate(w.weekStart, { day: "numeric", month: "short" }),
+                    color: w.color,
+                  }))}
+                  margin={{ top: 5, right: 10, left: -10, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fill: "#888", fontSize: 9 }} />
+                  <YAxis
+                    domain={[0, 10]}
+                    tick={{ fill: "#888", fontSize: 8 }}
+                    tickFormatter={(v) => `${v}h`}
+                    width={28}
+                  />
+                  <ReferenceLine y={7} stroke="#4ade80" strokeDasharray="5 5" strokeOpacity={0.5} />
+                  <Tooltip
+                    contentStyle={{
+                      background: "#1a1a2e",
+                      border: "1px solid rgba(255,255,255,0.1)",
+                      borderRadius: "8px",
+                      fontSize: "11px",
+                    }}
+                    formatter={(value, name, props) => {
+                      const display = props?.payload?.display || `${Number(value).toFixed(1)}h`;
+                      return [display, "Promedio"];
+                    }}
+                    labelFormatter={(label, payload) => payload?.[0]?.payload?.label || label}
+                    cursor={{ fill: "rgba(255,255,255,0.05)" }}
+                  />
+                  <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={30}>
+                    {sleepHistory.weeks.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
           {/* Mensaje si no hay datos */}
           {!loadingHistory && 
             (!weightHistory?.hasData || weightHistory.weeks.length === 0) &&
             (!stepsHistory?.hasData || stepsHistory.weeks.length === 0) &&
-            (!caloriesHistory?.hasData || caloriesHistory.weeks.length === 0) && (
+            (!caloriesHistory?.hasData || caloriesHistory.weeks.length === 0) &&
+            (!sleepHistory?.hasData || sleepHistory.weeks.length === 0) && (
             <div className="text-center py-6">
               <LineChartIcon className="w-8 h-8 text-text-muted mx-auto mb-2" />
               <p className="text-xs text-text-muted">
-                Cargá datos de peso, pasos o calorías para ver la evolución semanal
+                Cargá datos de peso, pasos, calorías o sueño para ver la evolución semanal
               </p>
             </div>
           )}

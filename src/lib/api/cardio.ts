@@ -187,10 +187,50 @@ export const getCardioSummary = async (studentId: number) => {
 };
 
 /**
- * Obtener estadísticas semanales de pasos
+ * Obtener estadísticas semanales de pasos (para una semana específica)
  */
 export const getStepsWeeklyStats = async (studentId: number) => {
   const response = await api.get(`/cardio/${studentId}/steps-weekly`);
+  return response.data;
+};
+
+/**
+ * Obtener estadísticas históricas semanales de pasos (para gráficos de evolución)
+ */
+export interface StepsWeeklyHistoryStats {
+  hasData: boolean;
+  weeks: Array<{
+    weekNumber: number;
+    weekStart: string;
+    weekEnd: string;
+    totalSteps: number;
+    averageSteps: number;
+    maxSteps: number;
+    minSteps: number;
+    daysWithData: number;
+    daysAchieved: number;
+    complianceRate: number;
+    variationSteps: number | null;
+    variationPercent: number | null;
+  }>;
+  dailyGoal: number;
+  summary: {
+    totalRecords: number;
+    totalWeeks: number;
+    totalSteps: number;
+    currentAverage: number | null;
+    initialAverage: number | null;
+    totalChange: number | null;
+    totalChangePercent: number | null;
+    avgWeeklyChange: number | null;
+    overallComplianceRate: number;
+    totalDaysAchieved: number;
+    totalDaysWithData: number;
+  };
+}
+
+export const getStepsWeeklyHistoryStats = async (studentId: number, weeks = 12): Promise<StepsWeeklyHistoryStats> => {
+  const response = await api.get(`/cardio/${studentId}/steps-weekly-stats?weeks=${weeks}`);
   return response.data;
 };
 

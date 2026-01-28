@@ -52,8 +52,32 @@ export const getWeightStats = async (studentId: number) => {
   return data;
 };
 
-export const getWeightWeeklyStats = async (studentId: number) => {
-  const { data } = await api.get(`/health/weight/${studentId}/weekly-stats`);
+export interface WeightWeeklyStats {
+  hasData: boolean;
+  weeks: Array<{
+    weekNumber: number;
+    weekStart: string;
+    weekEnd: string;
+    averageWeight: number;
+    minWeight: number;
+    maxWeight: number;
+    recordCount: number;
+    variationGrams: number | null;
+    variationPercent: number | null;
+  }>;
+  summary: {
+    totalRecords: number;
+    totalWeeks: number;
+    currentWeight: number;
+    initialWeight: number;
+    totalChange: number | null;
+    totalChangePercent: number | null;
+    avgWeeklyChange: number | null;
+  };
+}
+
+export const getWeightWeeklyStats = async (studentId: number, weeks = 12): Promise<WeightWeeklyStats> => {
+  const { data } = await api.get(`/health/weight/${studentId}/weekly-stats?weeks=${weeks}`);
   return data;
 };
 

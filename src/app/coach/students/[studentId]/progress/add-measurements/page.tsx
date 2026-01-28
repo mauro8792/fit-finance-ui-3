@@ -194,7 +194,9 @@ export default function CoachAddMeasurementsPage() {
           });
           setPliegues({
             triceps: data.pliegueTriceps?.toString() || "",
+            biceps: (data as any).pliegueBiceps?.toString() || "",
             subescapular: data.pliegueSubescapular?.toString() || "",
+            crestaIliaca: (data as any).pliegueCrestaIliaca?.toString() || "",
             supraespinal: data.pliegueSupraespinal?.toString() || "",
             abdominal: data.pliegueAbdominal?.toString() || "",
             musloMedial: data.pliegueMusloMedial?.toString() || "",

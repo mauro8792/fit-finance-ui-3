@@ -161,6 +161,42 @@ export const getWeeklySummary = async (studentId: number) => {
   return data;
 };
 
+export interface CaloriesWeeklyStats {
+  hasData: boolean;
+  weeks: Array<{
+    weekNumber: number;
+    weekStart: string;
+    weekEnd: string;
+    averageCalories: number;
+    averageProtein: number;
+    averageCarbs: number;
+    averageFat: number;
+    daysWithData: number;
+    variationCalories: number | null;
+    variationPercent: number | null;
+  }>;
+  targets: {
+    dailyCalories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+  } | null;
+  summary: {
+    totalRecords: number;
+    totalWeeks: number;
+    currentAverage: number | null;
+    initialAverage: number | null;
+    totalChange: number | null;
+    totalChangePercent: number | null;
+    avgWeeklyChange: number | null;
+  };
+}
+
+export const getCaloriesWeeklyStats = async (studentId: number, weeks = 12): Promise<CaloriesWeeklyStats> => {
+  const { data } = await api.get(`/nutrition/stats/${studentId}/weekly-stats?weeks=${weeks}`);
+  return data;
+};
+
 // ========== COACH FOOD CATALOG ==========
 
 export interface FoodItem {

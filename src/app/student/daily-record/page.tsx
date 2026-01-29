@@ -1,27 +1,40 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
-import { useAuthStore } from "@/stores/auth-store";
-import { createWeight } from "@/lib/api/student";
-import { addManualSteps, getStepsByDate } from "@/lib/api/cardio";
-import { getWeightByDate, addSleepLog, getSleepLogs, type SleepQuality } from "@/lib/api/health";
 import { PageHeader } from "@/components/navigation/PageHeader";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { Scale, Footprints, Loader2, Check, Edit3, Moon, Plus, Minus, BatteryFull, BatteryMedium, BatteryLow } from "lucide-react";
-import { toast } from "sonner";
+import { addManualSteps, getStepsByDate } from "@/lib/api/cardio";
+import { addSleepLog, getSleepLogs, getWeightByDate, type SleepQuality } from "@/lib/api/health";
+import { createWeight } from "@/lib/api/student";
 import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
+import { motion } from "framer-motion";
+import { BatteryFull, BatteryLow, BatteryMedium, Check, Edit3, Footprints, Loader2, Minus, Moon, Plus, Scale } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 
 // Obtener fecha de hoy en formato yyyy-mm-dd
 const getTodayISO = (): string => {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+};
+
+// Obtener fecha de ayer en formato yyyy-mm-dd
+const getYesterdayISO = (): string => {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  return `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
+};
+
+// Formatear fecha para mostrar (dd/mm/yyyy)
+const formatDateDisplay = (isoDate: string): string => {
+  const [year, month, day] = isoDate.split("-");
+  return `${day}/${month}/${year}`;
 };
 
 export default function DailyRecordPage() {
@@ -45,6 +58,7 @@ export default function DailyRecordPage() {
   const [stepsSuccess, setStepsSuccess] = useState(false);
   const [existingSteps, setExistingSteps] = useState<{ steps: number; id: number } | null>(null);
   const [checkingSteps, setCheckingSteps] = useState(false);
+  const [stepsDate, setStepsDate] = useState(getYesterdayISO()); // Por defecto ayer
 
   // Sleep state
   const [sleepHours, setSleepHours] = useState(7);
@@ -55,11 +69,30 @@ export default function DailyRecordPage() {
   const [existingSleep, setExistingSleep] = useState<{ id: number; sleepHours: number; sleepMinutes: number } | null>(null);
   const [checkingSleep, setCheckingSleep] = useState(false);
 
+  // Verificar pasos para una fecha específica
+  const checkExistingSteps = useCallback(async (studentId: number, date: string) => {
+    setCheckingSteps(true);
+    setExistingSteps(null);
+    setSteps("");
+    try {
+      const existingS = await getStepsByDate(studentId, date);
+      setExistingSteps(existingS);
+      if (existingS && existingS.steps > 0) {
+        setSteps(existingS.steps.toString());
+      }
+    } catch (error) {
+      console.error("Error checking existing steps:", error);
+    } finally {
+      setCheckingSteps(false);
+    }
+  }, []);
+
   // Verificar registros existentes para hoy
   const checkExistingRecords = useCallback(async (studentId: number) => {
     const today = getTodayISO();
+    const yesterday = getYesterdayISO();
     
-    // Verificar peso
+    // Verificar peso (hoy)
     setCheckingWeight(true);
     try {
       const existingW = await getWeightByDate(studentId, today);
@@ -73,21 +106,10 @@ export default function DailyRecordPage() {
       setCheckingWeight(false);
     }
 
-    // Verificar pasos
-    setCheckingSteps(true);
-    try {
-      const existingS = await getStepsByDate(studentId, today);
-      setExistingSteps(existingS);
-      if (existingS && existingS.steps > 0) {
-        setSteps(existingS.steps.toString());
-      }
-    } catch (error) {
-      console.error("Error checking existing steps:", error);
-    } finally {
-      setCheckingSteps(false);
-    }
+    // Verificar pasos (ayer por defecto)
+    await checkExistingSteps(studentId, yesterday);
 
-    // Verificar sueño
+    // Verificar sueño (hoy)
     setCheckingSleep(true);
     try {
       const sleepLogs = await getSleepLogs(studentId, 7);
@@ -103,7 +125,7 @@ export default function DailyRecordPage() {
     } finally {
       setCheckingSleep(false);
     }
-  }, []);
+  }, [checkExistingSteps]);
 
   // Verificar al montar el componente
   useEffect(() => {
@@ -111,6 +133,13 @@ export default function DailyRecordPage() {
       checkExistingRecords(student.id);
     }
   }, [student?.id, checkExistingRecords]);
+
+  // Verificar pasos cuando cambie la fecha
+  useEffect(() => {
+    if (student?.id && stepsDate) {
+      checkExistingSteps(student.id, stepsDate);
+    }
+  }, [student?.id, stepsDate, checkExistingSteps]);
 
   const handleWeightSubmit = async () => {
     if (!student?.id || !weight) return;
@@ -150,7 +179,7 @@ export default function DailyRecordPage() {
 
     setStepsLoading(true);
     try {
-      await addManualSteps(student.id, { steps: stepsNum, date: getTodayISO(), replace: true });
+      await addManualSteps(student.id, { steps: stepsNum, date: stepsDate, replace: true });
       setStepsSuccess(true);
       toast.success(existingSteps ? "Pasos actualizados correctamente" : "Pasos registrados correctamente");
       // Resetear después de mostrar el check
@@ -400,7 +429,7 @@ export default function DailyRecordPage() {
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <h2 className="text-lg font-semibold text-text">Pasos de hoy</h2>
+                        <h2 className="text-lg font-semibold text-text">Registrar Pasos</h2>
                         {checkingSteps && (
                           <Loader2 className="w-4 h-4 text-accent animate-spin" />
                         )}
@@ -412,7 +441,7 @@ export default function DailyRecordPage() {
                         )}
                       </div>
                       <p className="text-sm text-text-muted font-normal">
-                        {new Date().toLocaleDateString("es-AR", {
+                        {new Date(stepsDate + "T12:00:00").toLocaleDateString("es-AR", {
                           weekday: "long",
                           day: "numeric",
                           month: "long",
@@ -422,6 +451,32 @@ export default function DailyRecordPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {/* Selector de fecha */}
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-background/50 border border-border">
+                    <span className="text-sm text-text-muted">Fecha</span>
+                    <label className="flex items-center gap-2 cursor-pointer relative">
+                      <span className="text-sm font-medium text-text">
+                        {formatDateDisplay(stepsDate)}
+                      </span>
+                      <input
+                        type="date"
+                        value={stepsDate}
+                        onChange={(e) => setStepsDate(e.target.value)}
+                        max={getTodayISO()}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        disabled={stepsLoading}
+                        style={{ colorScheme: 'dark' }}
+                      />
+                      <svg 
+                        className="w-5 h-5 text-white" 
+                        fill="none" 
+                        stroke="currentColor" 
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    </label>
+                  </div>
                   {stepsSuccess ? (
                     <motion.div
                       initial={{ scale: 0.8, opacity: 0 }}

@@ -1,10 +1,11 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
-import { useAuthStore } from "@/stores/auth-store";
 import { Card, CardContent } from "@/components/ui/card";
-import { Dumbbell, User, ArrowRight } from "lucide-react";
+import { useAuthStore } from "@/stores/auth-store";
+import { motion } from "framer-motion";
+import { ArrowRight, Dumbbell, User } from "lucide-react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
 
 export default function SelectProfilePage() {
   const router = useRouter();
@@ -31,8 +32,14 @@ export default function SelectProfilePage() {
       >
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-primary-hover flex items-center justify-center shadow-lg shadow-primary/30 mx-auto mb-4">
-            <span className="text-3xl font-bold text-black">F</span>
+          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary to-primary-hover flex items-center justify-center shadow-lg shadow-primary/30 mx-auto mb-4 overflow-hidden">
+            <Image
+              src="/icons/gorila.png"
+              alt="BraCamp"
+              width={64}
+              height={64}
+              className="object-contain"
+            />
           </div>
           <h1 className="text-2xl font-bold text-text mb-2">
             ¡Hola, {user?.fullName?.split(" ")[0]}!

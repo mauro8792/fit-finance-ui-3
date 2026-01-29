@@ -1,76 +1,76 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter, useParams } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetFooter,
-  SheetDescription,
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetFooter,
+    SheetHeader,
+    SheetTitle,
 } from "@/components/ui/sheet";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { toast } from "sonner";
-import {
-  Dumbbell,
-  Calendar,
-  Plus,
-  Flame,
-  ArrowDownToLine,
-  Info,
-  ArrowLeft,
-  GripVertical,
-  Trash2,
-  Edit3,
-  Search,
-  Check,
-  Loader2,
-  ChevronLeft,
-  ChevronRight,
-  Timer,
-  Repeat,
-  Lock,
-  Link2,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Textarea } from "@/components/ui/textarea";
 import { useStudentRoutine } from "@/hooks/useRoutineV2";
 import { getExerciseCatalog, type CatalogExercise } from "@/lib/api/coach";
 import * as routineV2Api from "@/lib/api/routine-v2";
+import { cn } from "@/lib/utils";
 import type { StudentExercise, StudentSet } from "@/types/routine-v2";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+    ArrowDownToLine,
+    ArrowLeft,
+    Calendar,
+    Check,
+    ChevronLeft,
+    ChevronRight,
+    Dumbbell,
+    Edit3,
+    Flame,
+    GripVertical,
+    Info,
+    Link2,
+    Loader2,
+    Lock,
+    Plus,
+    Repeat,
+    Search,
+    Timer,
+    Trash2,
+} from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 // DnD Kit imports
 import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
+    closestCenter,
+    DndContext,
+    DragEndEvent,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
 } from "@dnd-kit/core";
 import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    useSortable,
+    verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
@@ -1051,6 +1051,48 @@ export default function EditStudentRoutinePage() {
             Los cambios se guardan automáticamente. Podés personalizar esta rutina para este alumno.
           </p>
         </div>
+
+        {/* Resumen de series por grupo muscular */}
+        {sortedExercises.length > 0 && (
+          <div className="bg-[#13131a] border border-[#1e1e2a] rounded-xl p-3">
+            <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
+              <span>💪</span> Series por grupo muscular
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {(() => {
+                const muscleGroups: Record<string, number> = {};
+                let totalSeries = 0;
+                sortedExercises.forEach(ex => {
+                  const group = ex.exerciseCatalog?.muscleGroup || "Otro";
+                  const seriesCount = ex.sets?.length || 0;
+                  muscleGroups[group] = (muscleGroups[group] || 0) + seriesCount;
+                  totalSeries += seriesCount;
+                });
+                return (
+                  <>
+                    {Object.entries(muscleGroups)
+                      .sort((a, b) => b[1] - a[1])
+                      .map(([group, series]) => (
+                        <Badge 
+                          key={group}
+                          variant="outline" 
+                          className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-[10px] py-0.5 px-1.5"
+                        >
+                          {group}: {series}
+                        </Badge>
+                      ))}
+                    <Badge 
+                      variant="outline" 
+                      className="bg-primary/10 text-primary border-primary/30 text-[10px] py-0.5 px-1.5 font-semibold"
+                    >
+                      Total: {totalSeries}
+                    </Badge>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        )}
 
         {/* Lista de ejercicios con Drag and Drop */}
         <DndContext

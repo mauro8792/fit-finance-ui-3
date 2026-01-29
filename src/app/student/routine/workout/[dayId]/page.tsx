@@ -1,6 +1,7 @@
 "use client";
 
 import { PageHeader } from "@/components/navigation/PageHeader";
+import { DayPerceptionForm } from "@/components/routine/DayPerceptionForm";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -977,9 +978,6 @@ export default function WorkoutPage() {
                                 <h3 className="font-medium text-sm text-white">{exerciseName}</h3>
                                 {isExComplete && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
                               </div>
-                              <p className="text-[11px] text-gray-500 mt-0.5">
-                                {muscleGroup} · {exercise.sets?.length || 0} series · Reps: {exercise.targetReps || "10-12"} · Descanso: {Math.floor((exercise.restSeconds || 120) / 60)}&apos;
-                              </p>
                             </div>
                           </div>
                           <div className="relative" ref={menuOpenV2 === exercise.id ? menuRefV2 : null}>
@@ -1262,6 +1260,61 @@ export default function WorkoutPage() {
           {exercisesV2.length === 0 && (
             <div className="text-center py-12">
               <p className="text-gray-500">No hay ejercicios en este día</p>
+            </div>
+          )}
+
+          {/* Resumen de grupos musculares del día */}
+          {exercisesV2.length > 0 && (
+            <Card className="bg-[#13131a] border-[#1e1e2a] mt-6">
+              <div className="p-4">
+                <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+                  <span className="text-lg">💪</span>
+                  Grupos musculares de este día
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {(() => {
+                    // Agrupar ejercicios por grupo muscular
+                    const muscleGroups: Record<string, number> = {};
+                    exercisesV2.forEach(ex => {
+                      const group = ex.exerciseCatalog?.muscleGroup || "Otro";
+                      muscleGroups[group] = (muscleGroups[group] || 0) + 1;
+                    });
+                    
+                    return Object.entries(muscleGroups)
+                      .sort((a, b) => b[1] - a[1])
+                      .map(([group, count]) => (
+                        <Badge 
+                          key={group}
+                          variant="outline" 
+                          className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-xs py-1 px-2"
+                        >
+                          {group}: {count} {count === 1 ? 'ejercicio' : 'ejercicios'}
+                        </Badge>
+                      ));
+                  })()}
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {/* Formulario de percepción (PRS y Esfuerzo) */}
+          {!isReadOnly && exercisesV2.length > 0 && (
+            <div className="mt-6">
+              <h3 className="text-sm font-semibold text-white mb-3 px-1">
+                Tu percepción del entrenamiento
+              </h3>
+              <DayPerceptionForm
+                dayId={dayIdParam}
+                initialReadiness={dayV2.readinessPre}
+                initialEffort={dayV2.postWorkoutEffort}
+                onUpdate={(readiness, effort) => {
+                  setDayV2(prev => prev ? { 
+                    ...prev, 
+                    readinessPre: readiness, 
+                    postWorkoutEffort: effort 
+                  } : prev);
+                }}
+              />
             </div>
           )}
         </div>

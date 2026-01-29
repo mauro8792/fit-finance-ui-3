@@ -1,39 +1,50 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
-import { useAuthStore } from "@/stores/auth-store";
 import { PageHeader } from "@/components/navigation/PageHeader";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Plus,
-  Camera,
-  Ruler,
-  Calendar,
-  ChevronRight,
-  ChevronDown,
-  ChevronUp,
-  TrendingDown,
-  TrendingUp,
-  ImageIcon,
-  X,
-  ZoomIn,
-  ArrowLeftRight,
-  User,
-  Activity,
-  Target,
-  Info,
-  Pencil,
-} from "lucide-react";
-import { cn, formatDate } from "@/lib/utils";
-import type { Anthropometry } from "@/types";
 import { getAnthropometryHistory } from "@/lib/api/health";
+import { cn, formatDate } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
+import type { Anthropometry } from "@/types";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+    Activity,
+    ArrowLeftRight,
+    Calendar,
+    Camera,
+    TrendingUp as ChartIcon,
+    ChevronDown,
+    ChevronRight,
+    ChevronUp,
+    ImageIcon,
+    Info,
+    Pencil,
+    Plus,
+    Ruler,
+    Target,
+    TrendingDown,
+    TrendingUp,
+    User,
+    X,
+    ZoomIn,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import {
+    CartesianGrid,
+    Legend,
+    Line,
+    LineChart,
+    ResponsiveContainer,
+    Tooltip,
+    XAxis,
+    YAxis,
+} from "recharts";
 
 // Tipo extendido con todos los campos de una antropometría completa
 interface FullAnthropometry extends Anthropometry {
@@ -193,6 +204,7 @@ export default function MeasurementsHistoryPage() {
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
   const [expandedItem, setExpandedItem] = useState<number | null>(null);
   const [compareItems, setCompareItems] = useState<[number | null, number | null]>([null, null]);
+  const [comparePhotoType, setComparePhotoType] = useState<"front" | "side" | "back">("front");
 
   useEffect(() => {
     const loadData = async () => {
@@ -292,12 +304,12 @@ export default function MeasurementsHistoryPage() {
     inverseColors = false 
   }: { 
     label: string; 
-    value?: number; 
-    prevValue?: number;
-    unit: string;
+    value?: number | null; 
+    prevValue?: number | null;
+    unit?: string;
     inverseColors?: boolean;
   }) => {
-    const diff = getChange(value, prevValue);
+    const diff = getChange(value ?? undefined, prevValue ?? undefined);
     const isPositive = diff !== null && diff > 0;
     const isNegative = diff !== null && diff < 0;
     
@@ -312,12 +324,15 @@ export default function MeasurementsHistoryPage() {
       }
     }
 
+    // Verificar si el valor existe (no es null ni undefined)
+    const hasValue = value !== undefined && value !== null;
+
     return (
       <div className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
         <span className="text-sm text-text-muted">{label}</span>
         <div className="flex items-center gap-3">
           <span className="text-sm font-medium text-text">
-            {value !== undefined ? `${value} ${unit}` : "-"}
+            {hasValue ? `${value}${unit ? ` ${unit}` : ""}` : "-"}
           </span>
           {diff !== null && diff !== 0 && (
             <span className={cn("text-xs font-medium", colorClass)}>
@@ -350,7 +365,7 @@ export default function MeasurementsHistoryPage() {
 
       <div className="px-4 py-4">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-3 bg-surface border border-border">
+          <TabsList className="grid w-full grid-cols-4 bg-surface border border-border">
             <TabsTrigger
               value="list"
               className="data-[state=active]:bg-primary data-[state=active]:text-black text-xs"
@@ -371,6 +386,13 @@ export default function MeasurementsHistoryPage() {
             >
               <ArrowLeftRight className="w-4 h-4 mr-1" />
               Comparar
+            </TabsTrigger>
+            <TabsTrigger
+              value="charts"
+              className="data-[state=active]:bg-emerald-500 data-[state=active]:text-black text-xs"
+            >
+              <ChartIcon className="w-4 h-4 mr-1" />
+              Gráficos
             </TabsTrigger>
           </TabsList>
 
@@ -612,15 +634,17 @@ export default function MeasurementsHistoryPage() {
                                       <Activity className="w-4 h-4" />
                                       Pliegues Cutáneos (mm)
                                     </h4>
-                                    <MeasureRow label="Tríceps" value={item.pliegueTriceps} prevValue={prevItem?.pliegueTriceps} unit="mm" inverseColors />
-                                    <MeasureRow label="Subescapular" value={item.pliegueSubescapular} prevValue={prevItem?.pliegueSubescapular} unit="mm" inverseColors />
-                                    <MeasureRow label="Supraespinal" value={item.pliegueSupraespinal} prevValue={prevItem?.pliegueSupraespinal} unit="mm" inverseColors />
-                                    <MeasureRow label="Abdominal" value={item.pliegueAbdominal} prevValue={prevItem?.pliegueAbdominal} unit="mm" inverseColors />
-                                    <MeasureRow label="Muslo medial" value={item.pliegueMusloMedial} prevValue={prevItem?.pliegueMusloMedial} unit="mm" inverseColors />
-                                    <MeasureRow label="Pantorrilla" value={item.plieguePantorrilla} prevValue={prevItem?.plieguePantorrilla} unit="mm" inverseColors />
+                                    <MeasureRow label="Tríceps" value={item.pliegueTriceps} prevValue={prevItem?.pliegueTriceps} inverseColors />
+                                    <MeasureRow label="Bíceps" value={item.pliegueBiceps} prevValue={prevItem?.pliegueBiceps} inverseColors />
+                                    <MeasureRow label="Subescapular" value={item.pliegueSubescapular} prevValue={prevItem?.pliegueSubescapular} inverseColors />
+                                    <MeasureRow label="Cresta ilíaca" value={item.pliegueCrestaIliaca} prevValue={prevItem?.pliegueCrestaIliaca} inverseColors />
+                                    <MeasureRow label="Supraespinal" value={item.pliegueSupraespinal} prevValue={prevItem?.pliegueSupraespinal} inverseColors />
+                                    <MeasureRow label="Abdominal" value={item.pliegueAbdominal} prevValue={prevItem?.pliegueAbdominal} inverseColors />
+                                    <MeasureRow label="Muslo medial" value={item.pliegueMusloMedial} prevValue={prevItem?.pliegueMusloMedial} inverseColors />
+                                    <MeasureRow label="Pantorrilla" value={item.plieguePantorrilla} prevValue={prevItem?.plieguePantorrilla} inverseColors />
                                     <div className="flex items-center justify-between pt-2 mt-2 border-t border-orange-500/30">
                                       <span className="text-sm font-medium text-orange-400">SUMA TOTAL</span>
-                                      <span className="text-lg font-bold text-orange-400">{item.sumaPliegues} mm</span>
+                                      <span className="text-lg font-bold text-orange-400">{item.sumaPliegues}</span>
                                     </div>
                                   </div>
 
@@ -635,6 +659,7 @@ export default function MeasurementsHistoryPage() {
                                     <MeasureRow label="Antebrazo" value={item.perimetroAntebrazo} prevValue={prevItem?.perimetroAntebrazo} unit="cm" />
                                     <MeasureRow label="Tórax" value={item.perimetroTorax} prevValue={prevItem?.perimetroTorax} unit="cm" />
                                     <MeasureRow label="Cintura" value={item.perimetroCintura} prevValue={prevItem?.perimetroCintura} unit="cm" inverseColors />
+                                    <MeasureRow label="Onfálico" value={item.perimetroOmbligo} prevValue={prevItem?.perimetroOmbligo} unit="cm" inverseColors />
                                     <MeasureRow label="Caderas" value={item.perimetroCaderas} prevValue={prevItem?.perimetroCaderas} unit="cm" />
                                     <MeasureRow label="Muslo superior" value={item.perimetroMusloSuperior} prevValue={prevItem?.perimetroMusloSuperior} unit="cm" />
                                     <MeasureRow label="Muslo medial" value={item.perimetroMusloMedial} prevValue={prevItem?.perimetroMusloMedial} unit="cm" />
@@ -780,6 +805,34 @@ export default function MeasurementsHistoryPage() {
                 {/* Comparación visual */}
                 {compareItem1 && compareItem2 ? (
                   <div className="space-y-4">
+                    {/* Selector de tipo de foto */}
+                    <div className="flex justify-center gap-2">
+                      <Button
+                        size="sm"
+                        variant={comparePhotoType === "front" ? "default" : "outline"}
+                        onClick={() => setComparePhotoType("front")}
+                        className="text-xs"
+                      >
+                        Frente
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={comparePhotoType === "side" ? "default" : "outline"}
+                        onClick={() => setComparePhotoType("side")}
+                        className="text-xs"
+                      >
+                        Lateral
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={comparePhotoType === "back" ? "default" : "outline"}
+                        onClick={() => setComparePhotoType("back")}
+                        className="text-xs"
+                      >
+                        Espalda
+                      </Button>
+                    </div>
+
                     {/* Fotos lado a lado */}
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
@@ -789,15 +842,20 @@ export default function MeasurementsHistoryPage() {
                             {formatDate(compareItem1.date, { day: "numeric", month: "short", year: "numeric" })}
                           </p>
                         </div>
-                        {compareItem1.photoFront ? (
-                          <div className="aspect-[3/4] rounded-lg overflow-hidden border-2 border-primary/30">
-                            <img src={compareItem1.photoFront} alt="Antes" className="w-full h-full object-cover" />
-                          </div>
-                        ) : (
-                          <div className="aspect-[3/4] rounded-lg bg-surface flex items-center justify-center border-2 border-dashed border-border">
-                            <User className="w-8 h-8 text-text-muted" />
-                          </div>
-                        )}
+                        {(() => {
+                          const photo = comparePhotoType === "front" ? compareItem1.photoFront 
+                            : comparePhotoType === "side" ? compareItem1.photoSide 
+                            : compareItem1.photoBack;
+                          return photo ? (
+                            <div className="aspect-[3/4] rounded-lg overflow-hidden border-2 border-primary/30">
+                              <img src={photo} alt="Antes" className="w-full h-full object-cover" />
+                            </div>
+                          ) : (
+                            <div className="aspect-[3/4] rounded-lg bg-surface flex items-center justify-center border-2 border-dashed border-border">
+                              <User className="w-8 h-8 text-text-muted" />
+                            </div>
+                          );
+                        })()}
                       </div>
                       <div className="space-y-2">
                         <div className="text-center">
@@ -806,15 +864,20 @@ export default function MeasurementsHistoryPage() {
                             {formatDate(compareItem2.date, { day: "numeric", month: "short", year: "numeric" })}
                           </p>
                         </div>
-                        {compareItem2.photoFront ? (
-                          <div className="aspect-[3/4] rounded-lg overflow-hidden border-2 border-accent/30">
-                            <img src={compareItem2.photoFront} alt="Después" className="w-full h-full object-cover" />
-                          </div>
-                        ) : (
-                          <div className="aspect-[3/4] rounded-lg bg-surface flex items-center justify-center border-2 border-dashed border-border">
-                            <User className="w-8 h-8 text-text-muted" />
-                          </div>
-                        )}
+                        {(() => {
+                          const photo = comparePhotoType === "front" ? compareItem2.photoFront 
+                            : comparePhotoType === "side" ? compareItem2.photoSide 
+                            : compareItem2.photoBack;
+                          return photo ? (
+                            <div className="aspect-[3/4] rounded-lg overflow-hidden border-2 border-accent/30">
+                              <img src={photo} alt="Después" className="w-full h-full object-cover" />
+                            </div>
+                          ) : (
+                            <div className="aspect-[3/4] rounded-lg bg-surface flex items-center justify-center border-2 border-dashed border-border">
+                              <User className="w-8 h-8 text-text-muted" />
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
 
@@ -969,6 +1032,164 @@ export default function MeasurementsHistoryPage() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Tab Gráficos */}
+          <TabsContent value="charts" className="mt-4 space-y-4">
+            {loading ? (
+              <div className="space-y-4">
+                <Skeleton className="h-64 w-full" />
+                <Skeleton className="h-64 w-full" />
+              </div>
+            ) : history.length < 2 ? (
+              <Card className="bg-surface/80 border-border">
+                <CardContent className="p-8 text-center">
+                  <ChartIcon className="w-12 h-12 text-text-muted mx-auto mb-4" />
+                  <p className="text-text-muted">
+                    Se necesitan al menos 2 mediciones para generar gráficos
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                {/* Gráfico 1: Peso + Grasa + Músculo */}
+                <Card className="bg-surface/80 border-border">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base text-text-secondary flex items-center gap-2">
+                      <Activity className="w-4 h-4" />
+                      Peso, Grasa y Músculo (kg)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-4">
+                    <ResponsiveContainer width="100%" height={250}>
+                      <LineChart
+                        data={[...history].reverse().map((item) => ({
+                          date: formatDate(item.date, { day: "2-digit", month: "short" }),
+                          peso: item.weight,
+                          grasa: item.tejidoAdiposoKg,
+                          musculo: item.tejidoMuscularKg,
+                        }))}
+                        margin={{ top: 5, right: 5, left: -20, bottom: 5 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                        <XAxis 
+                          dataKey="date" 
+                          stroke="#888" 
+                          tick={{ fill: "#888", fontSize: 10 }}
+                        />
+                        <YAxis 
+                          stroke="#888" 
+                          tick={{ fill: "#888", fontSize: 10 }}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "#1a1a1a",
+                            border: "1px solid #333",
+                            borderRadius: "8px",
+                          }}
+                          labelStyle={{ color: "#fff" }}
+                        />
+                        <Legend 
+                          wrapperStyle={{ fontSize: "12px" }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="peso"
+                          name="Peso"
+                          stroke="#60a5fa"
+                          strokeWidth={2}
+                          dot={{ fill: "#60a5fa", r: 4 }}
+                          connectNulls
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="grasa"
+                          name="T. Adiposo"
+                          stroke="#f97316"
+                          strokeWidth={2}
+                          dot={{ fill: "#f97316", r: 4 }}
+                          connectNulls
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="musculo"
+                          name="T. Muscular"
+                          stroke="#22c55e"
+                          strokeWidth={2}
+                          dot={{ fill: "#22c55e", r: 4 }}
+                          connectNulls
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Gráfico 2: Solo Músculo y Grasa */}
+                <Card className="bg-surface/80 border-border">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base text-text-secondary flex items-center gap-2">
+                      <Target className="w-4 h-4" />
+                      Composición Corporal (kg)
+                    </CardTitle>
+                    <p className="text-xs text-text-muted">
+                      Evolución de tejido muscular vs adiposo
+                    </p>
+                  </CardHeader>
+                  <CardContent className="p-4">
+                    <ResponsiveContainer width="100%" height={250}>
+                      <LineChart
+                        data={[...history].reverse().map((item) => ({
+                          date: formatDate(item.date, { day: "2-digit", month: "short" }),
+                          grasa: item.tejidoAdiposoKg,
+                          musculo: item.tejidoMuscularKg,
+                        }))}
+                        margin={{ top: 5, right: 5, left: -20, bottom: 5 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                        <XAxis 
+                          dataKey="date" 
+                          stroke="#888" 
+                          tick={{ fill: "#888", fontSize: 10 }}
+                        />
+                        <YAxis 
+                          stroke="#888" 
+                          tick={{ fill: "#888", fontSize: 10 }}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "#1a1a1a",
+                            border: "1px solid #333",
+                            borderRadius: "8px",
+                          }}
+                          labelStyle={{ color: "#fff" }}
+                        />
+                        <Legend 
+                          wrapperStyle={{ fontSize: "12px" }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="musculo"
+                          name="T. Muscular"
+                          stroke="#22c55e"
+                          strokeWidth={2}
+                          dot={{ fill: "#22c55e", r: 4 }}
+                          connectNulls
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="grasa"
+                          name="T. Adiposo"
+                          stroke="#f97316"
+                          strokeWidth={2}
+                          dot={{ fill: "#f97316", r: 4 }}
+                          connectNulls
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </>
+            )}
           </TabsContent>
         </Tabs>
       </div>

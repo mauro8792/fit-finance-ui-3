@@ -1,50 +1,50 @@
 "use client";
 
-import { useState, useRef, useMemo, useEffect, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
-import { useAuthStore } from "@/stores/auth-store";
 import { PageHeader } from "@/components/navigation/PageHeader";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { toast } from "sonner";
-import {
-  Camera,
-  X,
-  Ruler,
-  Save,
-  ChevronRight,
-  ImageIcon,
-  User,
-  Check,
-  Loader2,
-  Scale,
-  Activity,
-  Calculator,
-  Cloud,
-  CloudOff,
-  FileEdit,
-  Send,
-  Trash2,
-} from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { addAnthropometry, getAnthropometryById, updateAnthropometry, type Anthropometry, type AnthropometryInput } from "@/lib/api/health";
 import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
+import { AnimatePresence, motion } from "framer-motion";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { addAnthropometry, updateAnthropometry, getAnthropometryById, type AnthropometryInput, type Anthropometry } from "@/lib/api/health";
+    Activity,
+    Calculator,
+    Camera,
+    Check,
+    ChevronRight,
+    Cloud,
+    CloudOff,
+    FileEdit,
+    ImageIcon,
+    Loader2,
+    Ruler,
+    Save,
+    Scale,
+    Send,
+    Trash2,
+    User,
+    X,
+} from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 // Key para localStorage
 const DRAFT_STORAGE_KEY = "anthropometry_draft";
@@ -128,6 +128,7 @@ const initialPerimetros = {
   antebrazo: "",
   toraxMesoesternal: "",
   cintura: "",
+  ombligo: "",
   caderas: "",
   musloSuperior: "",
   musloMedial: "",
@@ -221,6 +222,7 @@ export default function AddMeasurementsPage() {
             antebrazo: data.perimetroAntebrazo?.toString() || "",
             toraxMesoesternal: data.perimetroTorax?.toString() || "",
             cintura: data.perimetroCintura?.toString() || "",
+            ombligo: data.perimetroOmbligo?.toString() || "",
             caderas: data.perimetroCaderas?.toString() || "",
             musloSuperior: data.perimetroMusloSuperior?.toString() || "",
             musloMedial: data.perimetroMusloMedial?.toString() || "",
@@ -544,6 +546,7 @@ export default function AddMeasurementsPage() {
         perimetroAntebrazo: perimetros.antebrazo ? parseFloat(perimetros.antebrazo) : undefined,
         perimetroTorax: perimetros.toraxMesoesternal ? parseFloat(perimetros.toraxMesoesternal) : undefined,
         perimetroCintura: perimetros.cintura ? parseFloat(perimetros.cintura) : undefined,
+        perimetroOmbligo: perimetros.ombligo ? parseFloat(perimetros.ombligo) : undefined,
         perimetroCaderas: perimetros.caderas ? parseFloat(perimetros.caderas) : undefined,
         perimetroMusloSuperior: perimetros.musloSuperior ? parseFloat(perimetros.musloSuperior) : undefined,
         perimetroMusloMedial: perimetros.musloMedial ? parseFloat(perimetros.musloMedial) : undefined,
@@ -974,6 +977,11 @@ export default function AddMeasurementsPage() {
                     label="Cintura (mínima)"
                     value={perimetros.cintura}
                     onChange={(v) => setPerimetros((p) => ({ ...p, cintura: v }))}
+                  />
+                  <MeasureInput
+                    label="Onfálico (ombligo)"
+                    value={perimetros.ombligo}
+                    onChange={(v) => setPerimetros((p) => ({ ...p, ombligo: v }))}
                   />
                   <MeasureInput
                     label="Caderas (máxima)"

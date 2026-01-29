@@ -103,6 +103,7 @@ export interface AnthropometryInput {
   perimetroAntebrazo?: number;
   perimetroTorax?: number;
   perimetroCintura?: number;
+  perimetroOmbligo?: number;
   perimetroCaderas?: number;
   perimetroMusloSuperior?: number;
   perimetroMusloMedial?: number;

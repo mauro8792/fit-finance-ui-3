@@ -1,62 +1,62 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { motion, AnimatePresence, PanInfo } from "framer-motion";
-import { getDayById, updateSet } from "@/lib/api/routine";
-import { useAuthStore } from "@/stores/auth-store";
-import { useRoutineStore } from "@/stores/routine-store";
-import api from "@/lib/api";
-import type { StudentDay, StudentExercise, StudentSet } from "@/types/routine-v2";
-import * as routineV2Api from "@/lib/api/routine-v2";
 import { PageHeader } from "@/components/navigation/PageHeader";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  CheckCircle2,
-  MoreVertical,
-  Timer,
-  Play,
-  Pause,
-  RotateCcw,
-  X,
-  Trophy,
-  History,
-  Plus,
-  Video,
-  GripVertical,
-  ChevronLeft,
-  ChevronRight,
-  Flame,
-  ArrowDownToLine,
-  Repeat,
-  Lock,
-  Info,
-} from "lucide-react";
-import { cn, formatDateWithWeekday, formatDate } from "@/lib/utils";
-import { toast } from "sonner";
+import api from "@/lib/api";
+import { getDayById, updateSet } from "@/lib/api/routine";
+import * as routineV2Api from "@/lib/api/routine-v2";
+import { cn, formatDate, formatDateWithWeekday } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
+import { useRoutineStore } from "@/stores/routine-store";
 import type { Day, Exercise, Set } from "@/types";
+import type { StudentDay, StudentExercise, StudentSet } from "@/types/routine-v2";
+import { AnimatePresence, motion, PanInfo } from "framer-motion";
+import {
+    ArrowDownToLine,
+    CheckCircle2,
+    ChevronLeft,
+    ChevronRight,
+    Flame,
+    GripVertical,
+    History,
+    Info,
+    Lock,
+    MoreVertical,
+    Pause,
+    Play,
+    Plus,
+    Repeat,
+    RotateCcw,
+    Timer,
+    Trophy,
+    Video,
+    X,
+} from "lucide-react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 // DnD Kit imports
 import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
+    closestCenter,
+    DndContext,
+    DragEndEvent,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
 } from "@dnd-kit/core";
 import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    useSortable,
+    verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
@@ -172,6 +172,9 @@ export default function WorkoutPage() {
     actualRpe: string;
     notes: string;
   } | null>(null);
+  
+  // Estado para prevenir doble clic al guardar serie
+  const [isSavingSet, setIsSavingSet] = useState(false);
 
   // Video V2 state
   const [showVideoV2, setShowVideoV2] = useState<string | null>(null);
@@ -544,8 +547,11 @@ export default function WorkoutPage() {
 
   // Save set V2
   const handleSaveSetV2 = async (status: "completed" | "failed" | "skipped" = "completed") => {
-    if (!editingSetV2) return;
+    // Protección contra doble clic
+    if (!editingSetV2 || isSavingSet) return;
 
+    setIsSavingSet(true);
+    
     try {
       const payload = {
         actualReps: editingSetV2.actualReps || undefined,
@@ -590,6 +596,8 @@ export default function WorkoutPage() {
     } catch (error) {
       console.error("Error saving set:", error);
       toast.error("Error al guardar");
+    } finally {
+      setIsSavingSet(false);
     }
   };
 
@@ -1394,17 +1402,28 @@ export default function WorkoutPage() {
                 
                 <div className="space-y-3">
                   <Button
-                    className="w-full h-14 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white font-bold text-lg rounded-xl"
+                    className="w-full h-14 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white font-bold text-lg rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
                     onClick={() => handleSaveSetV2("completed")}
+                    disabled={isSavingSet}
                   >
-                    <CheckCircle2 className="w-5 h-5 mr-2" />
-                    Guardar Serie
+                    {isSavingSet ? (
+                      <>
+                        <LoadingSpinner size="sm" className="mr-2" />
+                        Guardando...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-5 h-5 mr-2" />
+                        Guardar Serie
+                      </>
+                    )}
                   </Button>
                   <div className="grid grid-cols-2 gap-3">
                     <Button 
                       variant="outline" 
                       className="h-12 text-red-400 border-red-400/30 hover:bg-red-500/10" 
                       onClick={() => handleSaveSetV2("failed")}
+                      disabled={isSavingSet}
                     >
                       Fallida
                     </Button>
@@ -1412,6 +1431,7 @@ export default function WorkoutPage() {
                       variant="outline" 
                       className="h-12 text-yellow-400 border-yellow-400/30 hover:bg-yellow-500/10" 
                       onClick={() => handleSaveSetV2("skipped")}
+                      disabled={isSavingSet}
                     >
                       Saltar
                     </Button>

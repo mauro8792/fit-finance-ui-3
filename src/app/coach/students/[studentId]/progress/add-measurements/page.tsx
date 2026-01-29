@@ -1,35 +1,35 @@
 "use client";
 
-import { useState, useRef, useMemo, useEffect } from "react";
-import { useRouter, useParams, useSearchParams } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
 import { PageHeader } from "@/components/navigation/PageHeader";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { toast } from "sonner";
-import {
-  Camera,
-  X,
-  Ruler,
-  ChevronRight,
-  ImageIcon,
-  Check,
-  Loader2,
-  Scale,
-  Activity,
-  Calculator,
-  Send,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-import { addAnthropometry, updateAnthropometry, getAnthropometryById, type AnthropometryInput, type Anthropometry } from "@/lib/api/health";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { getStudentById } from "@/lib/api/coach";
+import { addAnthropometry, getAnthropometryById, updateAnthropometry, type Anthropometry, type AnthropometryInput } from "@/lib/api/health";
+import { cn } from "@/lib/utils";
 import type { Student } from "@/types";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+    Activity,
+    Calculator,
+    Camera,
+    Check,
+    ChevronRight,
+    ImageIcon,
+    Loader2,
+    Ruler,
+    Scale,
+    Send,
+    X,
+} from "lucide-react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 // Componente de input de medida
 const MeasureInput = ({
@@ -92,6 +92,7 @@ const initialPerimetros = {
   antebrazo: "",
   toraxMesoesternal: "",
   cintura: "",
+  ombligo: "",
   caderas: "",
   musloSuperior: "",
   musloMedial: "",
@@ -187,6 +188,7 @@ export default function CoachAddMeasurementsPage() {
             antebrazo: data.perimetroAntebrazo?.toString() || "",
             toraxMesoesternal: data.perimetroTorax?.toString() || "",
             cintura: data.perimetroCintura?.toString() || "",
+            ombligo: data.perimetroOmbligo?.toString() || "",
             caderas: data.perimetroCaderas?.toString() || "",
             musloSuperior: data.perimetroMusloSuperior?.toString() || "",
             musloMedial: data.perimetroMusloMedial?.toString() || "",
@@ -359,6 +361,7 @@ export default function CoachAddMeasurementsPage() {
         perimetroAntebrazo: perimetros.antebrazo ? parseFloat(perimetros.antebrazo) : undefined,
         perimetroTorax: perimetros.toraxMesoesternal ? parseFloat(perimetros.toraxMesoesternal) : undefined,
         perimetroCintura: perimetros.cintura ? parseFloat(perimetros.cintura) : undefined,
+        perimetroOmbligo: perimetros.ombligo ? parseFloat(perimetros.ombligo) : undefined,
         perimetroCaderas: perimetros.caderas ? parseFloat(perimetros.caderas) : undefined,
         perimetroMusloSuperior: perimetros.musloSuperior ? parseFloat(perimetros.musloSuperior) : undefined,
         perimetroMusloMedial: perimetros.musloMedial ? parseFloat(perimetros.musloMedial) : undefined,
@@ -712,6 +715,11 @@ export default function CoachAddMeasurementsPage() {
                     label="Cintura (mínima)"
                     value={perimetros.cintura}
                     onChange={(v) => setPerimetros((p) => ({ ...p, cintura: v }))}
+                  />
+                  <MeasureInput
+                    label="Onfálico (ombligo)"
+                    value={perimetros.ombligo}
+                    onChange={(v) => setPerimetros((p) => ({ ...p, ombligo: v }))}
                   />
                   <MeasureInput
                     label="Caderas (máxima)"

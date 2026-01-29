@@ -257,18 +257,21 @@ export interface Anthropometry {
   perimetroAntebrazo?: number;
   perimetroTorax?: number;
   perimetroCintura?: number;
+  perimetroOmbligo?: number;
   perimetroCaderas?: number;
   perimetroMusloSuperior?: number;
   perimetroMusloMedial?: number;
   perimetroPantorrilla?: number;
   
   // Pliegues cutáneos (mm)
-  plieguePantorrilla?: number;
   pliegueTriceps?: number;
+  pliegueBiceps?: number;
   pliegueSubescapular?: number;
+  pliegueCrestaIliaca?: number;
   pliegueSupraespinal?: number;
   pliegueAbdominal?: number;
   pliegueMusloMedial?: number;
+  plieguePantorrilla?: number;
   sumaPliegues?: number;
   
   // Composición corporal (calculada)

@@ -1,49 +1,51 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter, useParams } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
 import { PageHeader } from "@/components/navigation/PageHeader";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { MicrocycleMetrics } from "@/components/routine/MicrocycleMetrics";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-  SheetFooter,
-} from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { toast } from "sonner";
-import api from "@/lib/api";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  Dumbbell,
-  Calendar,
-  Edit,
-  ChevronRight,
-  ChevronDown,
-  Clock,
-  Play,
-  CheckCircle2,
-  Loader2,
-  Sparkles,
-  Target,
-  Flame,
-  ArrowDownToLine,
-  Trash2,
-  FolderPlus,
-  Check,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-import * as routineV2Api from "@/lib/api/routine-v2";
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetFooter,
+    SheetHeader,
+    SheetTitle,
+} from "@/components/ui/sheet";
+import { Skeleton } from "@/components/ui/skeleton";
+import api from "@/lib/api";
 import { getMacrocyclesByStudent } from "@/lib/api/routine";
-import type { StudentMesocycle, StudentMicrocycle, StudentDay, StudentExercise } from "@/types/routine-v2";
+import * as routineV2Api from "@/lib/api/routine-v2";
+import { cn } from "@/lib/utils";
 import type { Macrocycle } from "@/types";
+import type { StudentDay, StudentExercise, StudentMesocycle, StudentMicrocycle } from "@/types/routine-v2";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+    ArrowDownToLine,
+    Battery, BatteryFull, BatteryLow, BatteryMedium,
+    Calendar,
+    Check,
+    CheckCircle2,
+    ChevronDown,
+    ChevronRight,
+    Clock,
+    Dumbbell,
+    Edit,
+    Flame,
+    FolderPlus,
+    Loader2,
+    Play,
+    Sparkles,
+    Target,
+    Trash2,
+} from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 export default function StudentRoutineV2DetailPage() {
   const router = useRouter();
@@ -434,30 +436,81 @@ export default function StudentRoutineV2DetailPage() {
                         exit={{ height: 0 }}
                         className="overflow-hidden"
                       >
-                        <div className="p-3 space-y-2 border-t border-border">
-                          {sortedDays.map((day) => (
-                            <div
-                              key={day.id}
-                              className="p-3 bg-surface rounded-lg flex items-center justify-between cursor-pointer hover:bg-surface/80 transition-colors"
-                              onClick={() => openDaySheet(day, `M${micro.order}`)}
-                            >
-                              <div className="flex items-center gap-2">
-                                <Dumbbell className="w-4 h-4 text-primary" />
-                                <span className="text-sm font-medium">{day.name}</span>
+                        <div className="p-3 space-y-3 border-t border-border">
+                          {/* Métricas del microciclo */}
+                          <MicrocycleMetrics 
+                            microcycle={micro} 
+                            isV2={true} 
+                            showChart={true}
+                          />
+                          
+                          {/* Lista de días */}
+                          <div className="space-y-2">
+                            <p className="text-xs text-text-muted font-medium px-1">Días de entrenamiento</p>
+                            {sortedDays.map((day) => (
+                              <div
+                                key={day.id}
+                                className="p-3 bg-surface rounded-lg cursor-pointer hover:bg-surface/80 transition-colors"
+                                onClick={() => openDaySheet(day, `M${micro.order}`)}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <Dumbbell className="w-4 h-4 text-primary" />
+                                    <span className="text-sm font-medium">{day.name}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-text-muted">
+                                      {day.exercises?.length || 0} ejercicios
+                                    </span>
+                                    <ChevronRight className="w-4 h-4 text-text-muted" />
+                                  </div>
+                                </div>
+                                
+                                {/* Mostrar PRS y Esfuerzo si existen */}
+                                {(day.readinessPre || day.postWorkoutEffort) && (
+                                  <div className="flex items-center gap-3 mt-2 pt-2 border-t border-border/50">
+                                    {day.readinessPre && (
+                                      <div className="flex items-center gap-1.5">
+                                        <BatteryMedium className={cn(
+                                          "w-3.5 h-3.5",
+                                          day.readinessPre >= 7 ? "text-emerald-400" :
+                                          day.readinessPre >= 4 ? "text-amber-400" : "text-red-400"
+                                        )} />
+                                        <span className="text-[10px] text-text-muted">
+                                          PRS: <span className={cn(
+                                            "font-medium",
+                                            day.readinessPre >= 7 ? "text-emerald-400" :
+                                            day.readinessPre >= 4 ? "text-amber-400" : "text-red-400"
+                                          )}>{day.readinessPre}</span>
+                                        </span>
+                                      </div>
+                                    )}
+                                    {day.postWorkoutEffort && (
+                                      <div className="flex items-center gap-1.5">
+                                        <Flame className={cn(
+                                          "w-3.5 h-3.5",
+                                          day.postWorkoutEffort >= 8 ? "text-red-400" :
+                                          day.postWorkoutEffort >= 5 ? "text-amber-400" : "text-emerald-400"
+                                        )} />
+                                        <span className="text-[10px] text-text-muted">
+                                          Esfuerzo: <span className={cn(
+                                            "font-medium",
+                                            day.postWorkoutEffort >= 8 ? "text-red-400" :
+                                            day.postWorkoutEffort >= 5 ? "text-amber-400" : "text-emerald-400"
+                                          )}>{day.postWorkoutEffort}</span>
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
                               </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-text-muted">
-                                  {day.exercises?.length || 0} ejercicios
-                                </span>
-                                <ChevronRight className="w-4 h-4 text-text-muted" />
-                              </div>
-                            </div>
-                          ))}
-                          {sortedDays.length === 0 && (
-                            <p className="text-sm text-text-muted text-center py-2">
-                              Sin días configurados
-                            </p>
-                          )}
+                            ))}
+                            {sortedDays.length === 0 && (
+                              <p className="text-sm text-text-muted text-center py-2">
+                                Sin días configurados
+                              </p>
+                            )}
+                          </div>
                         </div>
                       </motion.div>
                     )}
@@ -489,6 +542,82 @@ export default function StudentRoutineV2DetailPage() {
           </SheetHeader>
 
           <ScrollArea className="h-[calc(100%-100px)]">
+            {/* Métricas del día */}
+            {selectedDay && selectedDay.exercises && selectedDay.exercises.length > 0 && (
+              <div className="mb-4 space-y-3">
+                {/* PRS y Esfuerzo si existen */}
+                {(selectedDay.readinessPre || selectedDay.postWorkoutEffort) && (
+                  <Card className="bg-surface/50 border-border">
+                    <CardContent className="p-3">
+                      <div className="flex items-center gap-4">
+                        {selectedDay.readinessPre && (
+                          <div className="flex items-center gap-2">
+                            <BatteryMedium className={cn(
+                              "w-4 h-4",
+                              selectedDay.readinessPre >= 7 ? "text-emerald-400" :
+                              selectedDay.readinessPre >= 4 ? "text-amber-400" : "text-red-400"
+                            )} />
+                            <span className="text-xs text-text-muted">
+                              PRS: <span className={cn(
+                                "font-bold text-sm",
+                                selectedDay.readinessPre >= 7 ? "text-emerald-400" :
+                                selectedDay.readinessPre >= 4 ? "text-amber-400" : "text-red-400"
+                              )}>{selectedDay.readinessPre}</span>/10
+                            </span>
+                          </div>
+                        )}
+                        {selectedDay.postWorkoutEffort && (
+                          <div className="flex items-center gap-2">
+                            <Flame className={cn(
+                              "w-4 h-4",
+                              selectedDay.postWorkoutEffort >= 8 ? "text-red-400" :
+                              selectedDay.postWorkoutEffort >= 5 ? "text-amber-400" : "text-emerald-400"
+                            )} />
+                            <span className="text-xs text-text-muted">
+                              Esfuerzo: <span className={cn(
+                                "font-bold text-sm",
+                                selectedDay.postWorkoutEffort >= 8 ? "text-red-400" :
+                                selectedDay.postWorkoutEffort >= 5 ? "text-amber-400" : "text-emerald-400"
+                              )}>{selectedDay.postWorkoutEffort}</span>/10
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Grupos musculares del día */}
+                <Card className="bg-surface/50 border-border">
+                  <CardContent className="p-3">
+                    <p className="text-xs text-text-muted mb-2 flex items-center gap-1">
+                      <span>💪</span> Grupos musculares
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(() => {
+                        const muscleGroups: Record<string, number> = {};
+                        selectedDay.exercises?.forEach(ex => {
+                          const group = ex.exerciseCatalog?.muscleGroup || "Otro";
+                          muscleGroups[group] = (muscleGroups[group] || 0) + 1;
+                        });
+                        return Object.entries(muscleGroups)
+                          .sort((a, b) => b[1] - a[1])
+                          .map(([group, count]) => (
+                            <Badge 
+                              key={group}
+                              variant="outline" 
+                              className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-[10px] py-0.5 px-1.5"
+                            >
+                              {group}: {count}
+                            </Badge>
+                          ));
+                      })()}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
             {!selectedDay?.exercises || selectedDay.exercises.length === 0 ? (
               <div className="text-center py-8 text-text-muted">
                 <Dumbbell className="w-12 h-12 mx-auto mb-4 opacity-30" />

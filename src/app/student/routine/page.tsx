@@ -1,6 +1,7 @@
 "use client";
 
 import { PageHeader } from "@/components/navigation/PageHeader";
+import { MicrocycleMetrics } from "@/components/routine/MicrocycleMetrics";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,7 +20,7 @@ import {
     Target,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export default function RoutinePage() {
   const router = useRouter();
@@ -64,27 +65,6 @@ export default function RoutinePage() {
 
   const showDaysCarousel = displayDays.length > 3;
   const maxDaysScroll = Math.max(0, displayDays.length - 3);
-
-  // Calculate muscle group summary for current microcycle
-  const getMicrocycleMuscleGroups = () => {
-    if (!currentMicro?.days) return {};
-    
-    const muscleGroups: Record<string, number> = {};
-    
-    currentMicro.days.forEach((day: any) => {
-      day.exercises?.forEach((exercise: any) => {
-        const group = exercise.exerciseCatalog?.muscleGroup || 
-                     exercise.ejercicioCatalogo?.grupoMuscular || 
-                     "Sin grupo";
-        muscleGroups[group] = (muscleGroups[group] || 0) + 1;
-      });
-    });
-    
-    return muscleGroups;
-  };
-
-  const muscleGroupsSummary = getMicrocycleMuscleGroups();
-  const sortedMuscleGroups = Object.entries(muscleGroupsSummary).sort((a, b) => b[1] - a[1]);
 
   // Update URL when microcycle changes (without causing reload)
   const updateMicroInUrl = (index: number) => {
@@ -349,58 +329,13 @@ export default function RoutinePage() {
           )}
         </div>
 
-        {/* Muscle group summary */}
-        {sortedMuscleGroups.length > 0 && (
-          <Card className="bg-surface/50 border-border">
-            <CardContent className="p-3">
-              <p className="text-xs text-text-muted mb-2">Grupos musculares en M{(currentMicro as any)?.order || selectedMicroIndex + 1}:</p>
-              <div className="flex flex-wrap gap-2">
-                {sortedMuscleGroups.map(([group, count]) => (
-                  <Badge 
-                    key={group} 
-                    variant="outline" 
-                    className="text-[10px] border-accent/30 text-accent"
-                  >
-                    {group}: {count}
-                  </Badge>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Quick Stats */}
-        {currentMicro?.days && currentMicro.days.length > 0 && (
-          <Card className="bg-surface/50 border-border">
-            <CardContent className="p-4">
-              <div className="grid grid-cols-3 gap-4 text-center">
-                <div>
-                  <p className="text-2xl font-bold text-primary">
-                    {currentMicro.days.filter((d) => !(d as any).esDescanso && !(d as any).isRestDay && d.exercises?.length).length}
-                  </p>
-                  <p className="text-xs text-text-muted">Días</p>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-text">
-                    {currentMicro.days.reduce(
-                      (acc, d) => acc + (d.exercises?.length || 0), 0
-                    )}
-                  </p>
-                  <p className="text-xs text-text-muted">Ejercicios</p>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-accent">
-                    {currentMicro.days.reduce(
-                      (acc, d) => acc + (d.exercises?.reduce(
-                        (a, e) => a + (e.sets?.length || 0), 0
-                      ) || 0), 0
-                    )}
-                  </p>
-                  <p className="text-xs text-text-muted">Series</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        {/* Métricas del microciclo con gráfico de grupos musculares */}
+        {currentMicro && (
+          <MicrocycleMetrics 
+            microcycle={currentMicro} 
+            isV2={isV2} 
+            showChart={true}
+          />
         )}
       </div>
     </div>

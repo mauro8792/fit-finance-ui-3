@@ -1,24 +1,24 @@
 import api from "@/lib/api";
 import type {
-  MesocycleTemplate,
-  TemplateMicrocycle,
-  TemplateDay,
-  TemplateExercise,
-  TemplateSet,
-  StudentMesocycle,
-  StudentDay,
-  StudentExercise,
-  StudentSet,
-  CreateTemplateDto,
-  UpdateTemplateDto,
-  AddMicrocycleDto,
-  AddDayDto,
-  AddExerciseDto,
-  AddSetDto,
-  AssignTemplateDto,
-  LogSetDto,
-  AssignedStudent,
-  AssignedCounts,
+    AddDayDto,
+    AddExerciseDto,
+    AddMicrocycleDto,
+    AddSetDto,
+    AssignedCounts,
+    AssignedStudent,
+    AssignTemplateDto,
+    CreateTemplateDto,
+    LogSetDto,
+    MesocycleTemplate,
+    StudentDay,
+    StudentExercise,
+    StudentMesocycle,
+    StudentSet,
+    TemplateDay,
+    TemplateExercise,
+    TemplateMicrocycle,
+    TemplateSet,
+    UpdateTemplateDto,
 } from "@/types/routine-v2";
 
 const BASE_URL = "/v2/routine-templates";
@@ -458,6 +458,22 @@ export const getMyWorkoutHistory = async (): Promise<V2WorkoutHistoryItem[]> => 
  */
 export const getStudentWorkoutHistory = async (studentId: number): Promise<V2WorkoutHistoryItem[]> => {
   const { data } = await api.get(`${STUDENT_BASE_URL}/student/${studentId}/history`);
+  return data;
+};
+
+// ========== PERCEPCIÓN DEL DÍA ==========
+
+export interface UpdateDayPerceptionDto {
+  readinessPre?: number;      // PRS (1-10)
+  postWorkoutEffort?: number; // Esfuerzo post (1-10)
+}
+
+/**
+ * Actualizar percepción del día (PRS y esfuerzo post-entrenamiento)
+ * Usado por el estudiante
+ */
+export const updateMyDayPerception = async (dayId: string, dto: UpdateDayPerceptionDto): Promise<StudentDay> => {
+  const { data } = await api.patch(`${MY_ROUTINE_URL}/days/${dayId}/perception`, dto);
   return data;
 };
 

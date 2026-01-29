@@ -155,6 +155,10 @@ export interface StudentDay {
   completedAt?: string;
   microcycleId: string;
   exercises: StudentExercise[];
+  
+  // ========== PERCEPCIÓN DEL ALUMNO ==========
+  readinessPre?: number;      // PRS - Readiness pre-entrenamiento (1-10)
+  postWorkoutEffort?: number; // Esfuerzo post-entrenamiento (1-10)
 }
 
 export interface StudentExercise {

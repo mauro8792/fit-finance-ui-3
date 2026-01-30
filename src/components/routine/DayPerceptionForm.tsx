@@ -14,6 +14,8 @@ interface DayPerceptionFormProps {
   initialEffort?: number;
   onUpdate?: (readiness?: number, effort?: number) => void;
   compact?: boolean;
+  /** Mostrar solo una sección: "readiness", "effort", o "both" (default) */
+  showOnly?: "readiness" | "effort" | "both";
 }
 
 export function DayPerceptionForm({
@@ -22,6 +24,7 @@ export function DayPerceptionForm({
   initialEffort,
   onUpdate,
   compact = false,
+  showOnly = "both",
 }: DayPerceptionFormProps) {
   const [readiness, setReadiness] = useState<number | undefined>(initialReadiness);
   const [effort, setEffort] = useState<number | undefined>(initialEffort);
@@ -131,102 +134,109 @@ export function DayPerceptionForm({
     );
   }
 
+  const showReadiness = showOnly === "both" || showOnly === "readiness";
+  const showEffort = showOnly === "both" || showOnly === "effort";
+
   return (
     <Card className="bg-[#13131a] border-[#1e1e2a]">
       <CardContent className="p-4 space-y-4">
         {/* PRS - Readiness Pre-Entrenamiento */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <div className={cn(
-                "p-1.5 rounded-lg",
-                readiness ? getReadinessColor(readiness) : "bg-gray-800"
-              )}>
-                {getReadinessIcon(readiness)}
+        {showReadiness && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <div className={cn(
+                  "p-1.5 rounded-lg",
+                  readiness ? getReadinessColor(readiness) : "bg-gray-800"
+                )}>
+                  {getReadinessIcon(readiness)}
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-white">PRS - Readiness</h4>
+                  <p className="text-[10px] text-gray-500">¿Cómo te sentís antes de entrenar?</p>
+                </div>
               </div>
-              <div>
-                <h4 className="text-sm font-medium text-white">PRS - Readiness</h4>
-                <p className="text-[10px] text-gray-500">¿Cómo te sentís antes de entrenar?</p>
-              </div>
+              {readiness && (
+                <span className={cn(
+                  "text-2xl font-bold",
+                  getReadinessColor(readiness).split(" ")[0]
+                )}>
+                  {readiness}
+                </span>
+              )}
             </div>
-            {readiness && (
-              <span className={cn(
-                "text-2xl font-bold",
-                getReadinessColor(readiness).split(" ")[0]
-              )}>
-                {readiness}
-              </span>
-            )}
+            
+            <div className="flex gap-1">
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                <button
+                  key={n}
+                  onClick={() => handleReadinessChange(n)}
+                  className={cn(
+                    "flex-1 h-8 rounded text-xs font-medium transition-all",
+                    readiness === n
+                      ? getReadinessColor(n)
+                      : "bg-[#1a1a24] text-gray-500 hover:bg-[#252530] border border-transparent"
+                  )}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+            <div className="flex justify-between mt-1 text-[9px] text-gray-600">
+              <span>Muy cansado</span>
+              <span>Excelente</span>
+            </div>
           </div>
-          
-          <div className="flex gap-1">
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
-              <button
-                key={n}
-                onClick={() => handleReadinessChange(n)}
-                className={cn(
-                  "flex-1 h-8 rounded text-xs font-medium transition-all",
-                  readiness === n
-                    ? getReadinessColor(n)
-                    : "bg-[#1a1a24] text-gray-500 hover:bg-[#252530] border border-transparent"
-                )}
-              >
-                {n}
-              </button>
-            ))}
-          </div>
-          <div className="flex justify-between mt-1 text-[9px] text-gray-600">
-            <span>Muy cansado</span>
-            <span>Excelente</span>
-          </div>
-        </div>
+        )}
 
         {/* Esfuerzo Post-Entrenamiento */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <div className={cn(
-                "p-1.5 rounded-lg",
-                effort ? getEffortColor(effort) : "bg-gray-800"
-              )}>
-                <Flame className="w-5 h-5" />
+        {showEffort && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <div className={cn(
+                  "p-1.5 rounded-lg",
+                  effort ? getEffortColor(effort) : "bg-gray-800"
+                )}>
+                  <Flame className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-white">Esfuerzo Post</h4>
+                  <p className="text-[10px] text-gray-500">¿Qué tan duro fue el entreno?</p>
+                </div>
               </div>
-              <div>
-                <h4 className="text-sm font-medium text-white">Esfuerzo Post</h4>
-                <p className="text-[10px] text-gray-500">¿Qué tan duro fue el entreno?</p>
-              </div>
+              {effort && (
+                <span className={cn(
+                  "text-2xl font-bold",
+                  getEffortColor(effort).split(" ")[0]
+                )}>
+                  {effort}
+                </span>
+              )}
             </div>
-            {effort && (
-              <span className={cn(
-                "text-2xl font-bold",
-                getEffortColor(effort).split(" ")[0]
-              )}>
-                {effort}
-              </span>
-            )}
+            
+            <div className="flex gap-1">
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                <button
+                  key={n}
+                  onClick={() => handleEffortChange(n)}
+                  className={cn(
+                    "flex-1 h-8 rounded text-xs font-medium transition-all",
+                    effort === n
+                      ? getEffortColor(n)
+                      : "bg-[#1a1a24] text-gray-500 hover:bg-[#252530] border border-transparent"
+                  )}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+            <div className="flex justify-between mt-1 text-[9px] text-gray-600">
+              <span>Muy fácil</span>
+              <span>Máximo esfuerzo</span>
+            </div>
           </div>
-          
-          <div className="flex gap-1">
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
-              <button
-                key={n}
-                onClick={() => handleEffortChange(n)}
-                className={cn(
-                  "flex-1 h-8 rounded text-xs font-medium transition-all",
-                  effort === n
-                    ? getEffortColor(n)
-                    : "bg-[#1a1a24] text-gray-500 hover:bg-[#252530] border border-transparent"
-                )}
-              >
-                {n}
-              </button>
-            ))}
-          </div>
-          <div className="flex justify-between mt-1 text-[9px] text-gray-600">
-            <span>Muy fácil</span>
-            <span>Máximo esfuerzo</span>
-          </div>
-        </div>
+        )}
 
         {/* Botón guardar */}
         {hasChanges && (

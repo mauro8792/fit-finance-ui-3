@@ -176,6 +176,9 @@ export default function WorkoutPage() {
   
   // Estado para prevenir doble clic al guardar serie
   const [isSavingSet, setIsSavingSet] = useState(false);
+  // Ref para protección sincrónica contra doble click/touch rápido
+  // (useState tiene un pequeño delay, useRef es instantáneo)
+  const isSavingSetRef = useRef(false);
 
   // Video V2 state
   const [showVideoV2, setShowVideoV2] = useState<string | null>(null);
@@ -548,10 +551,19 @@ export default function WorkoutPage() {
 
   // Save set V2
   const handleSaveSetV2 = async (status: "completed" | "failed" | "skipped" = "completed") => {
-    // Protección contra doble clic
-    if (!editingSetV2 || isSavingSet) return;
+    // Protección contra doble clic/touch usando ref (sincrónico) + state
+    // El ref se actualiza inmediatamente, el state puede tener delay
+    if (!editingSetV2 || isSavingSet || isSavingSetRef.current) return;
 
+    // Marcar inmediatamente como "guardando" para bloquear requests concurrentes
+    isSavingSetRef.current = true;
     setIsSavingSet(true);
+    
+    // Guardar referencias antes de cualquier operación async
+    // para evitar problemas si el estado cambia durante la ejecución
+    const setToSave = editingSetV2.set.id;
+    const exerciseId = editingSetV2.exercise.id;
+    const restSeconds = editingSetV2.exercise.restSeconds || 120;
     
     try {
       const payload = {
@@ -564,16 +576,16 @@ export default function WorkoutPage() {
       };
 
       // Usar endpoint de estudiante (/v2/my-routines)
-      await routineV2Api.logMySet(editingSetV2.set.id, payload);
+      await routineV2Api.logMySet(setToSave, payload);
 
-      // Update local state
+      // Update local state usando las referencias guardadas
       setExercisesV2((prev) =>
         prev.map((ex) => {
-          if (ex.id !== editingSetV2.exercise.id) return ex;
+          if (ex.id !== exerciseId) return ex;
           return {
             ...ex,
             sets: ex.sets?.map((s) =>
-              s.id === editingSetV2.set.id ? { ...s, ...payload } : s
+              s.id === setToSave ? { ...s, ...payload } : s
             ),
           };
         })
@@ -591,13 +603,13 @@ export default function WorkoutPage() {
 
       if (status === "completed") {
         toast.success("¡Serie guardada! 🎉");
-        const restSeconds = editingSetV2.exercise.restSeconds || 120;
         startRestTimer(restSeconds);
       }
     } catch (error) {
       console.error("Error saving set:", error);
       toast.error("Error al guardar");
     } finally {
+      isSavingSetRef.current = false;
       setIsSavingSet(false);
     }
   };
@@ -910,6 +922,26 @@ export default function WorkoutPage() {
                   </button>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* PRS - Readiness ANTES de entrenar */}
+          {!isReadOnly && exercisesV2.length > 0 && (
+            <div className="mb-4">
+              <h3 className="text-sm font-semibold text-white mb-3 px-1">
+                ¿Cómo te sentís hoy?
+              </h3>
+              <DayPerceptionForm
+                dayId={dayIdParam}
+                initialReadiness={dayV2?.readinessPre}
+                showOnly="readiness"
+                onUpdate={(readiness) => {
+                  setDayV2(prev => prev ? { 
+                    ...prev, 
+                    readinessPre: readiness
+                  } : prev);
+                }}
+              />
             </div>
           )}
 
@@ -1263,6 +1295,26 @@ export default function WorkoutPage() {
             </div>
           )}
 
+          {/* Esfuerzo Post-Entrenamiento (DESPUÉS de entrenar) */}
+          {!isReadOnly && exercisesV2.length > 0 && (
+            <div className="mt-6">
+              <h3 className="text-sm font-semibold text-white mb-3 px-1">
+                ¿Qué tan duro fue el entreno?
+              </h3>
+              <DayPerceptionForm
+                dayId={dayIdParam}
+                initialEffort={dayV2?.postWorkoutEffort}
+                showOnly="effort"
+                onUpdate={(_, effort) => {
+                  setDayV2(prev => prev ? { 
+                    ...prev, 
+                    postWorkoutEffort: effort 
+                  } : prev);
+                }}
+              />
+            </div>
+          )}
+
           {/* Resumen de grupos musculares del día */}
           {exercisesV2.length > 0 && (
             <Card className="bg-[#13131a] border-[#1e1e2a] mt-6">
@@ -1295,27 +1347,6 @@ export default function WorkoutPage() {
                 </div>
               </div>
             </Card>
-          )}
-
-          {/* Formulario de percepción (PRS y Esfuerzo) */}
-          {!isReadOnly && exercisesV2.length > 0 && (
-            <div className="mt-6">
-              <h3 className="text-sm font-semibold text-white mb-3 px-1">
-                Tu percepción del entrenamiento
-              </h3>
-              <DayPerceptionForm
-                dayId={dayIdParam}
-                initialReadiness={dayV2.readinessPre}
-                initialEffort={dayV2.postWorkoutEffort}
-                onUpdate={(readiness, effort) => {
-                  setDayV2(prev => prev ? { 
-                    ...prev, 
-                    readinessPre: readiness, 
-                    postWorkoutEffort: effort 
-                  } : prev);
-                }}
-              />
-            </div>
           )}
         </div>
 

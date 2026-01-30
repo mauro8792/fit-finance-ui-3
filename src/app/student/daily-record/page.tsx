@@ -12,10 +12,10 @@ import { addSleepLog, getSleepLogs, getWeightByDate, type SleepQuality } from "@
 import { createWeight } from "@/lib/api/student";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
-import { motion } from "framer-motion";
-import { BatteryFull, BatteryLow, BatteryMedium, Check, Edit3, Footprints, Loader2, Minus, Moon, Plus, Scale } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { BatteryFull, BatteryLow, BatteryMedium, Check, ChevronLeft, ChevronRight, Edit3, Footprints, Loader2, Minus, Moon, PartyPopper, Plus, Scale } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 // Obtener fecha de hoy en formato yyyy-mm-dd
@@ -37,11 +37,36 @@ const formatDateDisplay = (isoDate: string): string => {
   return `${day}/${month}/${year}`;
 };
 
+// Generar array de últimos N días para el scroll de fechas
+const getLastNDays = (n: number): { date: string; label: string; dayName: string }[] => {
+  const days = [];
+  for (let i = 0; i < n; i++) {
+    const date = new Date();
+    date.setDate(date.getDate() - i);
+    const isoDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    const dayName = date.toLocaleDateString("es-AR", { weekday: "short" });
+    const label = i === 0 ? "Hoy" : i === 1 ? "Ayer" : date.getDate().toString();
+    days.push({ date: isoDate, label, dayName: dayName.charAt(0).toUpperCase() + dayName.slice(1) });
+  }
+  return days;
+};
+
 export default function DailyRecordPage() {
   const router = useRouter();
   const { student } = useAuthStore();
 
   const [activeTab, setActiveTab] = useState("weight");
+  
+  // Estado para indicadores de completado en tabs
+  const [weightCompleted, setWeightCompleted] = useState(false);
+  const [sleepCompleted, setSleepCompleted] = useState(false);
+  const [stepsCompleted, setStepsCompleted] = useState(false);
+  
+  // Estado para mensaje final
+  const [showFinalMessage, setShowFinalMessage] = useState(false);
+  
+  // Ref para scroll de fechas
+  const dateScrollRef = useRef<HTMLDivElement>(null);
   
   // Weight state
   const [weight, setWeight] = useState("");
@@ -80,8 +105,10 @@ export default function DailyRecordPage() {
       if (existingS && existingS.steps > 0) {
         setSteps(existingS.steps.toString());
       }
+      return existingS;
     } catch (error) {
       console.error("Error checking existing steps:", error);
+      return null;
     } finally {
       setCheckingSteps(false);
     }
@@ -99,6 +126,7 @@ export default function DailyRecordPage() {
       setExistingWeight(existingW);
       if (existingW && existingW.weight > 0) {
         setWeight(existingW.weight.toFixed(2));
+        setWeightCompleted(true);
       }
     } catch (error) {
       console.error("Error checking existing weight:", error);
@@ -107,7 +135,10 @@ export default function DailyRecordPage() {
     }
 
     // Verificar pasos (ayer por defecto)
-    await checkExistingSteps(studentId, yesterday);
+    const existingS = await checkExistingSteps(studentId, yesterday);
+    if (existingS && existingS.steps > 0) {
+      setStepsCompleted(true);
+    }
 
     // Verificar sueño (hoy)
     setCheckingSleep(true);
@@ -119,6 +150,7 @@ export default function DailyRecordPage() {
         setSleepHours(existingSl.sleepHours);
         setSleepMinutes(existingSl.sleepMinutes);
         setSleepQuality(existingSl.quality);
+        setSleepCompleted(true);
       }
     } catch (error) {
       console.error("Error checking existing sleep:", error);
@@ -154,12 +186,15 @@ export default function DailyRecordPage() {
     try {
       await createWeight(student.id, weightNum, getTodayISO(), weightNotes || undefined);
       setWeightSuccess(true);
+      setWeightCompleted(true);
       toast.success(existingWeight ? "Peso actualizado correctamente" : "Peso registrado correctamente");
-      // Resetear después de mostrar el check
+      // Resetear y avanzar al siguiente tab
       setTimeout(() => {
         setWeightSuccess(false);
         setExistingWeight({ weight: parseFloat(weight), id: existingWeight?.id || 0 });
-      }, 1500);
+        // Auto-avance a sueño
+        setActiveTab("sleep");
+      }, 1200);
     } catch (error) {
       console.error(error);
       toast.error("Error al registrar peso");
@@ -181,12 +216,17 @@ export default function DailyRecordPage() {
     try {
       await addManualSteps(student.id, { steps: stepsNum, date: stepsDate, replace: true });
       setStepsSuccess(true);
+      setStepsCompleted(true);
       toast.success(existingSteps ? "Pasos actualizados correctamente" : "Pasos registrados correctamente");
       // Resetear después de mostrar el check
       setTimeout(() => {
         setStepsSuccess(false);
         setExistingSteps({ steps: parseInt(steps), id: existingSteps?.id || 0 });
-      }, 1500);
+        // Mostrar mensaje final si todo está completo
+        if (weightCompleted && sleepCompleted) {
+          setShowFinalMessage(true);
+        }
+      }, 1200);
     } catch (error) {
       console.error(error);
       toast.error("Error al registrar pasos");
@@ -212,13 +252,16 @@ export default function DailyRecordPage() {
         quality: sleepQuality,
       });
       setSleepSuccess(true);
+      setSleepCompleted(true);
       const displayFormat = sleepMinutes > 0 ? `${sleepHours}h ${sleepMinutes}m` : `${sleepHours}h`;
       toast.success(existingSleep ? `Sueño actualizado a ${displayFormat}` : `${displayFormat} registrados`);
-      // Resetear después de mostrar el check
+      // Resetear y avanzar al siguiente tab
       setTimeout(() => {
         setSleepSuccess(false);
         setExistingSleep({ id: existingSleep?.id || 0, sleepHours, sleepMinutes });
-      }, 1500);
+        // Auto-avance a pasos
+        setActiveTab("steps");
+      }, 1200);
     } catch (error: any) {
       console.error(error);
       if (error?.response?.status === 400) {
@@ -256,35 +299,56 @@ export default function DailyRecordPage() {
       <div className="px-4 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-3 bg-surface border border-border">
+            {/* Tab 1: Peso */}
             <TabsTrigger
               value="weight"
               className={cn(
                 "data-[state=active]:bg-primary data-[state=active]:text-black",
-                "flex items-center gap-2 text-xs"
+                "flex items-center gap-1.5 text-xs relative"
               )}
             >
-              <Scale className="w-4 h-4" />
+              {weightCompleted ? (
+                <div className="w-4 h-4 rounded-full bg-success flex items-center justify-center">
+                  <Check className="w-3 h-3 text-white" />
+                </div>
+              ) : (
+                <Scale className="w-4 h-4" />
+              )}
               Peso
             </TabsTrigger>
-            <TabsTrigger
-              value="steps"
-              className={cn(
-                "data-[state=active]:bg-accent data-[state=active]:text-black",
-                "flex items-center gap-2 text-xs"
-              )}
-            >
-              <Footprints className="w-4 h-4" />
-              Pasos
-            </TabsTrigger>
+            {/* Tab 2: Sueño (antes era 3ro) */}
             <TabsTrigger
               value="sleep"
               className={cn(
                 "data-[state=active]:bg-indigo-500 data-[state=active]:text-white",
-                "flex items-center gap-2 text-xs"
+                "flex items-center gap-1.5 text-xs"
               )}
             >
-              <Moon className="w-4 h-4" />
+              {sleepCompleted ? (
+                <div className="w-4 h-4 rounded-full bg-success flex items-center justify-center">
+                  <Check className="w-3 h-3 text-white" />
+                </div>
+              ) : (
+                <Moon className="w-4 h-4" />
+              )}
               Sueño
+            </TabsTrigger>
+            {/* Tab 3: Pasos (antes era 2do) */}
+            <TabsTrigger
+              value="steps"
+              className={cn(
+                "data-[state=active]:bg-accent data-[state=active]:text-black",
+                "flex items-center gap-1.5 text-xs"
+              )}
+            >
+              {stepsCompleted ? (
+                <div className="w-4 h-4 rounded-full bg-success flex items-center justify-center">
+                  <Check className="w-3 h-3 text-white" />
+                </div>
+              ) : (
+                <Footprints className="w-4 h-4" />
+              )}
+              Pasos
             </TabsTrigger>
           </TabsList>
 
@@ -451,31 +515,31 @@ export default function DailyRecordPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {/* Selector de fecha */}
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-background/50 border border-border">
+                  {/* Scroll de fechas horizontal */}
+                  <div className="space-y-2">
                     <span className="text-sm text-text-muted">Fecha</span>
-                    <label className="flex items-center gap-2 cursor-pointer relative">
-                      <span className="text-sm font-medium text-text">
-                        {formatDateDisplay(stepsDate)}
-                      </span>
-                      <input
-                        type="date"
-                        value={stepsDate}
-                        onChange={(e) => setStepsDate(e.target.value)}
-                        max={getTodayISO()}
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                        disabled={stepsLoading}
-                        style={{ colorScheme: 'dark' }}
-                      />
-                      <svg 
-                        className="w-5 h-5 text-white" 
-                        fill="none" 
-                        stroke="currentColor" 
-                        viewBox="0 0 24 24"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                    </label>
+                    <div 
+                      ref={dateScrollRef}
+                      className="flex gap-2 overflow-x-auto pb-2 -mx-2 px-2 scrollbar-hide"
+                      style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                    >
+                      {getLastNDays(7).map((day) => (
+                        <button
+                          key={day.date}
+                          onClick={() => setStepsDate(day.date)}
+                          disabled={stepsLoading}
+                          className={cn(
+                            "flex-shrink-0 flex flex-col items-center justify-center w-16 h-16 rounded-xl border transition-all",
+                            stepsDate === day.date
+                              ? "border-accent bg-accent/20 text-accent"
+                              : "border-border bg-background/50 text-text-muted hover:border-accent/50"
+                          )}
+                        >
+                          <span className="text-[10px] uppercase opacity-70">{day.dayName}</span>
+                          <span className="text-lg font-bold">{day.label}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   {stepsSuccess ? (
                     <motion.div
@@ -789,6 +853,80 @@ export default function DailyRecordPage() {
             </motion.div>
           </TabsContent>
         </Tabs>
+
+        {/* Mensaje final cuando todo está completo */}
+        <AnimatePresence>
+          {showFinalMessage && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+              onClick={() => setShowFinalMessage(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.8 }}
+                animate={{ scale: 1 }}
+                className="bg-surface border border-border rounded-2xl p-8 max-w-sm w-full text-center shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <motion.div
+                  initial={{ scale: 0, rotate: -180 }}
+                  animate={{ scale: 1, rotate: 0 }}
+                  transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+                  className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-success to-accent flex items-center justify-center"
+                >
+                  <PartyPopper className="w-10 h-10 text-white" />
+                </motion.div>
+                
+                <motion.h2
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                  className="text-2xl font-bold text-text mb-2"
+                >
+                  ¡Excelente!
+                </motion.h2>
+                
+                <motion.p
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.4 }}
+                  className="text-text-muted mb-6"
+                >
+                  Tenés tu registro al día. ¡Seguí así!
+                </motion.p>
+                
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5 }}
+                  className="flex gap-2 justify-center mb-4"
+                >
+                  <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                    <Check className="w-4 h-4 text-primary" />
+                  </div>
+                  <div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center">
+                    <Check className="w-4 h-4 text-indigo-400" />
+                  </div>
+                  <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center">
+                    <Check className="w-4 h-4 text-accent" />
+                  </div>
+                </motion.div>
+                
+                <Button
+                  onClick={() => {
+                    setShowFinalMessage(false);
+                    router.push("/student");
+                  }}
+                  className="w-full h-12 bg-gradient-to-r from-success to-accent text-black font-semibold"
+                >
+                  Volver al inicio
+                </Button>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

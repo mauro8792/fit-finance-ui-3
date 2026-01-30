@@ -280,10 +280,15 @@ export interface Anthropometry {
   masaGrasaKg?: number;
   masaMagraKg?: number;
   
-  // Fotos (URLs de Cloudinary)
+  // Fotos (URLs de Cloudinary - originales)
   photoFront?: string;
   photoSide?: string;
   photoBack?: string;
+  
+  // Fotos (URLs firmadas - usar estas para mostrar, expiran en 1 hora)
+  photoFrontSigned?: string;
+  photoSideSigned?: string;
+  photoBackSigned?: string;
   
   notes?: string;
   createdAt?: string;

@@ -240,12 +240,17 @@ export default function MeasurementsHistoryPage() {
     return current - previous;
   };
 
-  // Obtener fotos de una medición
+  // Obtener fotos de una medición (usa URLs firmadas si están disponibles)
   const getPhotos = (item: FullAnthropometry) => {
     const photos = [];
-    if (item.photoFront) photos.push({ type: "Frente", url: item.photoFront });
-    if (item.photoSide) photos.push({ type: "Lateral", url: item.photoSide });
-    if (item.photoBack) photos.push({ type: "Espalda", url: item.photoBack });
+    // Preferir URLs firmadas (photoFrontSigned) sobre las originales (photoFront)
+    const frontUrl = (item as any).photoFrontSigned || item.photoFront;
+    const sideUrl = (item as any).photoSideSigned || item.photoSide;
+    const backUrl = (item as any).photoBackSigned || item.photoBack;
+    
+    if (frontUrl) photos.push({ type: "Frente", url: frontUrl });
+    if (sideUrl) photos.push({ type: "Lateral", url: sideUrl });
+    if (backUrl) photos.push({ type: "Espalda", url: backUrl });
     return photos;
   };
 
@@ -843,9 +848,12 @@ export default function MeasurementsHistoryPage() {
                           </p>
                         </div>
                         {(() => {
-                          const photo = comparePhotoType === "front" ? compareItem1.photoFront 
-                            : comparePhotoType === "side" ? compareItem1.photoSide 
-                            : compareItem1.photoBack;
+                          // Usar URLs firmadas si están disponibles
+                          const photo = comparePhotoType === "front" 
+                            ? ((compareItem1 as any).photoFrontSigned || compareItem1.photoFront)
+                            : comparePhotoType === "side" 
+                            ? ((compareItem1 as any).photoSideSigned || compareItem1.photoSide)
+                            : ((compareItem1 as any).photoBackSigned || compareItem1.photoBack);
                           return photo ? (
                             <div className="aspect-[3/4] rounded-lg overflow-hidden border-2 border-primary/30">
                               <img src={photo} alt="Antes" className="w-full h-full object-cover" />
@@ -865,9 +873,12 @@ export default function MeasurementsHistoryPage() {
                           </p>
                         </div>
                         {(() => {
-                          const photo = comparePhotoType === "front" ? compareItem2.photoFront 
-                            : comparePhotoType === "side" ? compareItem2.photoSide 
-                            : compareItem2.photoBack;
+                          // Usar URLs firmadas si están disponibles
+                          const photo = comparePhotoType === "front" 
+                            ? ((compareItem2 as any).photoFrontSigned || compareItem2.photoFront)
+                            : comparePhotoType === "side" 
+                            ? ((compareItem2 as any).photoSideSigned || compareItem2.photoSide)
+                            : ((compareItem2 as any).photoBackSigned || compareItem2.photoBack);
                           return photo ? (
                             <div className="aspect-[3/4] rounded-lg overflow-hidden border-2 border-accent/30">
                               <img src={photo} alt="Después" className="w-full h-full object-cover" />

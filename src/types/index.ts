@@ -372,6 +372,8 @@ export interface DashboardSummary {
     today?: number; // Pasos de hoy
     todayPercent?: number; // % del objetivo de hoy
     compliancePercent?: number; // % del promedio semanal (para compatibilidad)
+    previousWeekAverage?: number | null; // Promedio semana anterior
+    weeklyChange?: number | null; // Diferencia vs semana anterior
   };
   weight: {
     current: number | null; // Promedio semana actual
@@ -381,6 +383,8 @@ export interface DashboardSummary {
     previousWeekAverage: number | null;
     daysWithDataCurrentWeek?: number;
     daysWithDataPreviousWeek?: number;
+    weeklyLossPercentMin?: number | null; // % mínimo pérdida (ej: 0.5)
+    weeklyLossPercentMax?: number | null; // % máximo pérdida (ej: 1.0)
   };
 }
 

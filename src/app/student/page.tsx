@@ -7,6 +7,8 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useRoutineStore } from "@/stores/routine-store";
 import { useHistoryCache } from "@/stores/history-cache";
 import { getDashboardSummary, getStudentFees, getWeightHistory } from "@/lib/api/student";
+import { getSleepWeeklyStats, type SleepWeeklyStats } from "@/lib/api/health";
+import { getCaloriesWeeklyStats, getNutritionProfile, type CaloriesWeeklyStats } from "@/lib/api/nutrition";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -16,20 +18,19 @@ import {
   Footprints,
   Scale,
   Dumbbell,
-  Utensils,
   ClipboardList,
   TrendingUp,
   TrendingDown,
   ArrowRight,
   Plus,
   CreditCard,
-  Target,
   Zap,
   Play,
   CheckCircle2,
-  History,
   Loader2,
   Timer,
+  Flame,
+  Moon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
@@ -88,6 +89,16 @@ export default function StudentDashboard() {
   const [fees, setFees] = useState<Fee[]>([]);
   const [lastWeight, setLastWeight] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  // Stats adicionales para el home rediseñado
+  const [sleepStats, setSleepStats] = useState<SleepWeeklyStats | null>(null);
+  const [caloriesStats, setCaloriesStats] = useState<CaloriesWeeklyStats | null>(null);
+  const [nutritionTargets, setNutritionTargets] = useState<{
+    dailyCalories?: number;
+    protein?: number;
+    carbs?: number;
+    fat?: number;
+  } | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -115,10 +126,13 @@ export default function StudentDashboard() {
         await loadRoutine(student.id);
         
         // Cargar datos frescos en paralelo
-        const [summaryData, feesData, weightData] = await Promise.all([
+        const [summaryData, feesData, weightData, sleepData, caloriesData, nutritionProfile] = await Promise.all([
           getDashboardSummary(student.id).catch(() => null),
           getStudentFees(student.id).catch(() => []),
           getWeightHistory(student.id, 1).catch(() => []),
+          getSleepWeeklyStats(student.id, 2).catch(() => null),
+          getCaloriesWeeklyStats(student.id, 2).catch(() => null),
+          getNutritionProfile(student.id).catch(() => null),
         ]);
         
         // Actualizar state y cache
@@ -136,6 +150,18 @@ export default function StudentDashboard() {
           const w = weightData[0].weight;
           setLastWeight(typeof w === 'number' ? w : parseFloat(w));
           setCachedWeight(student.id, weightData);
+        }
+        
+        // Stats adicionales
+        if (sleepData) setSleepStats(sleepData);
+        if (caloriesData) setCaloriesStats(caloriesData);
+        if (nutritionProfile) {
+          setNutritionTargets({
+            dailyCalories: nutritionProfile.targetDailyCalories,
+            protein: nutritionProfile.targetProteinGrams,
+            carbs: nutritionProfile.targetCarbsGrams,
+            fat: nutritionProfile.targetFatGrams,
+          });
         }
       } catch (error) {
         console.error("Error loading dashboard:", error);
@@ -322,6 +348,7 @@ export default function StudentDashboard() {
       nextWorkout: nextMicroExists || nextMicroIndex === selectedMicroIndex ? nextWorkout : null,
       lastWorkout,
       lastWorkoutMicroIndex,
+      lastWorkoutDate: lastWorkedDate,
       nextMicroIndex: nextMicroExists ? nextMicroIndex : selectedMicroIndex,
       isNextMicroDifferent: nextMicroIndex !== selectedMicroIndex && nextMicroExists,
     };
@@ -358,6 +385,31 @@ export default function StudentDashboard() {
     ? (weightGoal < 0 && weightChange < 0) || (weightGoal > 0 && weightChange > 0)
     : true;
 
+  // Sleep stats
+  const currentSleepWeek = sleepStats?.weeks?.[0];
+  const previousSleepWeek = sleepStats?.weeks?.[1];
+  const sleepAverage = currentSleepWeek?.displayFormat || null;
+  const sleepAverageMinutes = currentSleepWeek 
+    ? (currentSleepWeek.averageHours * 60 + currentSleepWeek.averageMinutes)
+    : 0;
+  const previousSleepMinutes = previousSleepWeek 
+    ? (previousSleepWeek.averageHours * 60 + previousSleepWeek.averageMinutes)
+    : 0;
+  const sleepDiffMinutes = sleepAverageMinutes - previousSleepMinutes;
+
+  // Calories stats
+  const currentCaloriesWeek = caloriesStats?.weeks?.[0];
+  const previousCaloriesWeek = caloriesStats?.weeks?.[1];
+  const caloriesAverage = currentCaloriesWeek?.averageCalories || 0;
+  const caloriesDiff = currentCaloriesWeek && previousCaloriesWeek 
+    ? Math.round(currentCaloriesWeek.averageCalories - previousCaloriesWeek.averageCalories)
+    : 0;
+  const caloriesGoal = caloriesStats?.targets?.dailyCalories || nutritionTargets?.dailyCalories || 0;
+  const caloriesPercent = caloriesGoal > 0 ? Math.round((caloriesAverage / caloriesGoal) * 100) : 0;
+
+  // Steps diff vs previous week
+  const stepsDiff = summary?.steps?.weeklyChange ?? 0;
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -384,6 +436,68 @@ export default function StudentDashboard() {
 
       {/* Content */}
       <div className="px-4 space-y-4 stagger-children">
+        {/* Weekly Goals Section */}
+        <motion.div>
+          <p className="text-xs text-text-muted mb-2 px-1">Objetivos para esta semana (promedio)</p>
+          <div className="flex gap-2">
+            {/* Steps Goal */}
+            {summary?.steps?.dailyGoal && summary.steps.dailyGoal > 0 && (
+              <div className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-full bg-surface border border-border">
+                <Footprints className="w-4 h-4 text-primary flex-shrink-0" />
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-text whitespace-nowrap">
+                    {summary.steps.dailyGoal.toLocaleString()}
+                  </span>
+                  <span className="text-[10px] text-text-muted whitespace-nowrap">pasos</span>
+                </div>
+              </div>
+            )}
+            
+            {/* Macros Goal */}
+            {nutritionTargets?.dailyCalories && nutritionTargets.dailyCalories > 0 && (
+              <div className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-full bg-surface border border-border">
+                <Flame className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-text whitespace-nowrap">
+                    Kcal {nutritionTargets.dailyCalories}
+                  </span>
+                  {(nutritionTargets.protein || nutritionTargets.carbs || nutritionTargets.fat) && (
+                    <span className="text-[10px] text-text-muted whitespace-nowrap">
+                      CH {nutritionTargets.carbs || 0} - P {nutritionTargets.protein || 0} - G {nutritionTargets.fat || 0}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+            
+            {/* Weight Goal - mostrar rango si hay %, sino valor fijo */}
+            {(summary?.weight?.weeklyLossPercentMin || summary?.weight?.weeklyGoal) && (
+              <div className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-full bg-surface border border-border">
+                <Scale className="w-4 h-4 text-success flex-shrink-0" />
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-text whitespace-nowrap">
+                    Δ peso:
+                  </span>
+                  {summary?.weight?.weeklyLossPercentMin && summary?.weight?.weeklyLossPercentMax && currentWeight ? (
+                    // Mostrar rango calculado desde % del peso actual
+                    <span className="text-[10px] font-medium whitespace-nowrap text-success">
+                      -{Math.round(currentWeight * (summary.weight.weeklyLossPercentMin / 100) * 1000)}/{Math.round(currentWeight * (summary.weight.weeklyLossPercentMax / 100) * 1000)} gr
+                    </span>
+                  ) : summary?.weight?.weeklyGoal && summary.weight.weeklyGoal !== 0 ? (
+                    // Mostrar valor fijo
+                    <span className={cn(
+                      "text-[10px] font-medium whitespace-nowrap",
+                      summary.weight.weeklyGoal < 0 ? "text-success" : "text-info"
+                    )}>
+                      {summary.weight.weeklyGoal > 0 ? "+" : ""}{summary.weight.weeklyGoal} gr/sem
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            )}
+          </div>
+        </motion.div>
+
         {/* Quick Action Button */}
         <motion.div>
           <Button
@@ -418,39 +532,69 @@ export default function StudentDashboard() {
           </motion.div>
         )}
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* Stats Grid - 4 cards estilo mockup */}
+        <div className="grid grid-cols-2 gap-2.5">
           {/* Steps Card */}
           <motion.div>
             <Card
               className="bg-surface/80 border-border cursor-pointer touch-feedback h-full"
               onClick={() => router.push("/student/progress?tab=steps")}
             >
-              <CardContent className="p-4">
+              <CardContent className="p-3.5">
                 {loading ? (
                   <div className="space-y-2">
-                    <Skeleton className="h-10 w-10 rounded-full" />
+                    <Skeleton className="h-12 w-12 rounded-full" />
                     <Skeleton className="h-4 w-20" />
                     <Skeleton className="h-6 w-16" />
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center">
-                        <Footprints className="w-5 h-5 text-accent" />
+                    <div className="flex items-center justify-between">
+                      {/* Círculo de progreso con icono */}
+                      <div className="relative">
+                        <svg className="w-14 h-14 -rotate-90">
+                          <circle
+                            cx="28"
+                            cy="28"
+                            r="24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="3"
+                            className="text-primary/20"
+                          />
+                          <circle
+                            cx="28"
+                            cy="28"
+                            r="24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="3"
+                            strokeDasharray={`${stepsProgress * 1.508} 150.8`}
+                            strokeLinecap="round"
+                            className="text-primary"
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <Footprints className="w-6 h-6 text-primary" />
+                        </div>
                       </div>
-                      <Badge variant="secondary" className="bg-accent/10 text-accent text-xs">
+                      <Badge variant="secondary" className="bg-primary/10 text-primary text-sm font-bold px-2.5 py-1">
                         {summary?.steps ? Math.round((summary.steps.weekAverage / summary.steps.dailyGoal) * 100) : 0}%
                       </Badge>
                     </div>
-                    <p className="text-xs text-text-muted mb-1">Promedio pasos semana</p>
-                    <p className="text-xl font-bold text-text">
+                    <p className="text-xs text-text-muted mt-1">Promedio pasos semana</p>
+                    <p className="text-2xl font-bold text-text leading-tight">
                       {summary?.steps?.weekAverage?.toLocaleString() || 0}
                     </p>
-                    <p className="text-xs text-text-muted">
-                      Objetivo: {summary?.steps?.dailyGoal?.toLocaleString() || 0}
+                    <p className="text-xs">
+                      {stepsDiff !== 0 ? (
+                        <span className={stepsDiff > 0 ? "text-success" : "text-warning"}>
+                          {stepsDiff > 0 ? "+" : ""}{stepsDiff.toLocaleString()} vs semana anterior
+                        </span>
+                      ) : (
+                        <span className="text-primary">Objetivo: {summary?.steps?.dailyGoal?.toLocaleString() || 0}</span>
+                      )}
                     </p>
-                    <Progress value={stepsProgress} className="h-1.5 mt-2" />
                   </>
                 )}
               </CardContent>
@@ -463,49 +607,197 @@ export default function StudentDashboard() {
               className="bg-surface/80 border-border cursor-pointer touch-feedback h-full"
               onClick={() => router.push("/student/progress?tab=weight")}
             >
-              <CardContent className="p-4">
+              <CardContent className="p-3.5">
                 {loading ? (
                   <div className="space-y-2">
-                    <Skeleton className="h-10 w-10 rounded-full" />
+                    <Skeleton className="h-12 w-12 rounded-full" />
                     <Skeleton className="h-4 w-20" />
                     <Skeleton className="h-6 w-16" />
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="w-10 h-10 rounded-full bg-info/20 flex items-center justify-center">
-                        <Scale className="w-5 h-5 text-info" />
+                    <div className="flex items-center justify-between">
+                      <div className="w-14 h-14 rounded-full bg-info/20 flex items-center justify-center">
+                        <Scale className="w-6 h-6 text-info" />
                       </div>
-                      {weightChange !== 0 && (
-                        <Badge 
-                          variant="secondary" 
-                          className={cn(
-                            "text-xs",
-                            isOnTrack ? "bg-success/10 text-success" : "bg-warning/10 text-warning"
-                          )}
-                        >
-                          {weightChange > 0 ? "+" : ""}{weightChange.toFixed(2)} kg
-                        </Badge>
-                      )}
+                      <Badge 
+                        variant="secondary" 
+                        className={cn(
+                          "text-sm font-bold px-2.5 py-1",
+                          weightChange === 0 ? "bg-info/10 text-info" :
+                          isOnTrack ? "bg-success/10 text-success" : "bg-warning/10 text-warning"
+                        )}
+                      >
+                        {weightChange === 0 ? "0.00 kg" : `${weightChange > 0 ? "+" : ""}${weightChange.toFixed(2)} kg`}
+                      </Badge>
                     </div>
-                    <p className="text-xs text-text-muted mb-1">Promedio peso semana</p>
-                    <p className="text-xl font-bold text-text">
+                    <p className="text-xs text-text-muted mt-1">Promedio peso semana</p>
+                    <p className="text-2xl font-bold text-text leading-tight">
                       {currentWeight !== null ? currentWeight.toFixed(2) : "--"} kg
                     </p>
-                    <div className="flex items-center gap-1 mt-1">
+                    <div className="flex items-center gap-1">
                       {weightChange !== 0 && (
                         weightChange < 0 ? (
-                          <TrendingDown className="w-3 h-3 text-success" />
+                          <TrendingDown className="w-3.5 h-3.5 text-success" />
                         ) : (
-                          <TrendingUp className="w-3 h-3 text-warning" />
+                          <TrendingUp className="w-3.5 h-3.5 text-warning" />
                         )
                       )}
-                      <p className="text-xs text-text-muted">
+                      <p className={cn(
+                        "text-xs",
+                        weightChange < 0 ? "text-success" : weightChange > 0 ? "text-warning" : "text-text-muted"
+                      )}>
                         {weightChange !== 0 
                           ? `${weightChange > 0 ? "+" : ""}${weightChangeGrams}g vs semana anterior`
                           : "Esta semana"
                         }
                       </p>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Sleep Card */}
+          <motion.div>
+            <Card
+              className="bg-surface/80 border-border cursor-pointer touch-feedback h-full"
+              onClick={() => router.push("/student/progress?tab=sleep")}
+            >
+              <CardContent className="p-3.5">
+                {loading ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-12 w-12 rounded-full" />
+                    <Skeleton className="h-4 w-20" />
+                    <Skeleton className="h-6 w-16" />
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <div className="w-14 h-14 rounded-full bg-purple-500/20 flex items-center justify-center">
+                        <Moon className="w-6 h-6 text-purple-400" />
+                      </div>
+                      {sleepDiffMinutes !== 0 && previousSleepMinutes > 0 ? (
+                        <Badge 
+                          variant="secondary" 
+                          className={cn(
+                            "text-sm font-bold px-2.5 py-1",
+                            sleepDiffMinutes > 0 ? "bg-success/10 text-success" : "bg-warning/10 text-warning"
+                          )}
+                        >
+                          {sleepDiffMinutes > 0 ? "+" : ""}{sleepDiffMinutes}min
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary" className="bg-purple-500/10 text-purple-400 text-sm font-bold px-2.5 py-1">
+                          7-9h ideal
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-text-muted mt-1">Promedio sueño semana</p>
+                    <p className="text-2xl font-bold text-text leading-tight">
+                      {sleepAverage || "--"}
+                    </p>
+                    <div className="flex items-center gap-1">
+                      {sleepDiffMinutes !== 0 && previousSleepMinutes > 0 ? (
+                        <>
+                          {sleepDiffMinutes > 0 ? (
+                            <TrendingUp className="w-3.5 h-3.5 text-success" />
+                          ) : (
+                            <TrendingDown className="w-3.5 h-3.5 text-warning" />
+                          )}
+                          <p className={cn(
+                            "text-xs",
+                            sleepDiffMinutes > 0 ? "text-success" : "text-warning"
+                          )}>
+                            vs semana anterior
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-xs text-text-muted">Esta semana</p>
+                      )}
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Calories Card */}
+          <motion.div>
+            <Card
+              className="bg-surface/80 border-border cursor-pointer touch-feedback h-full"
+              onClick={() => router.push("/student/nutrition")}
+            >
+              <CardContent className="p-3.5">
+                {loading ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-12 w-12 rounded-full" />
+                    <Skeleton className="h-4 w-20" />
+                    <Skeleton className="h-6 w-16" />
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between">
+                      {/* Círculo de progreso con icono */}
+                      <div className="relative">
+                        <svg className="w-14 h-14 -rotate-90">
+                          <circle
+                            cx="28"
+                            cy="28"
+                            r="24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="3"
+                            className="text-amber-500/20"
+                          />
+                          <circle
+                            cx="28"
+                            cy="28"
+                            r="24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="3"
+                            strokeDasharray={`${Math.min(caloriesPercent, 100) * 1.508} 150.8`}
+                            strokeLinecap="round"
+                            className="text-amber-500"
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <Flame className="w-6 h-6 text-amber-500" />
+                        </div>
+                      </div>
+                      {caloriesGoal > 0 && (
+                        <Badge variant="secondary" className="bg-amber-500/10 text-amber-500 text-sm font-bold px-2.5 py-1">
+                          {caloriesPercent}%
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-text-muted mt-1">Promedio kcal semana</p>
+                    <p className="text-2xl font-bold text-text leading-tight">
+                      {caloriesAverage > 0 ? Math.round(caloriesAverage).toLocaleString() : "--"}
+                    </p>
+                    <div className="flex items-center gap-1">
+                      {caloriesDiff !== 0 && (
+                        <>
+                          {caloriesDiff > 0 ? (
+                            <TrendingUp className="w-3.5 h-3.5 text-success" />
+                          ) : (
+                            <TrendingDown className="w-3.5 h-3.5 text-warning" />
+                          )}
+                          <p className={cn(
+                            "text-xs",
+                            caloriesDiff > 0 ? "text-success" : "text-warning"
+                          )}>
+                            {caloriesDiff > 0 ? "+" : ""}{caloriesDiff} vs semana anterior
+                          </p>
+                        </>
+                      )}
+                      {caloriesDiff === 0 && (
+                        <p className="text-xs text-text-muted">
+                          {caloriesGoal > 0 ? `Objetivo: ${caloriesGoal.toLocaleString()}` : "Esta semana"}
+                        </p>
+                      )}
                     </div>
                   </>
                 )}
@@ -536,22 +828,23 @@ export default function StudentDashboard() {
                     <p className="text-sm text-text-muted">{activeMicro.mesoName}</p>
                     
                     {/* Próximo y Último entreno */}
-                    <div className="flex gap-4 mt-2 text-xs">
-                      {activeMicro.nextWorkout && (
+                    <div className="flex flex-col gap-1 mt-2 text-xs">
+                      {activeMicro.lastWorkout && (
                         <div>
-                          <span className="text-text-muted">Próximo: </span>
-                          <span className="text-primary font-medium">
-                            {activeMicro.nextWorkout}
-                            {activeMicro.isNextMicroDifferent && ` - M${activeMicro.nextMicroIndex + 1}`}
+                          <span className="text-text-muted">Último entreno: </span>
+                          <span className="text-text-secondary">
+                            {activeMicro.lastWorkout}
+                            {activeMicro.lastWorkoutDate && ` ${(activeMicro.lastWorkoutDate as Date).getDate()}/${(activeMicro.lastWorkoutDate as Date).getMonth() + 1}`}
+                            {activeMicro.lastWorkoutMicroIndex !== activeMicro.microIndex && ` - M${activeMicro.lastWorkoutMicroIndex + 1}`}
                           </span>
                         </div>
                       )}
-                      {activeMicro.lastWorkout && (
+                      {activeMicro.nextWorkout && (
                         <div>
-                          <span className="text-text-muted">Último: </span>
-                          <span className="text-text-secondary">
-                            {activeMicro.lastWorkout}
-                            {activeMicro.lastWorkoutMicroIndex !== activeMicro.microIndex && ` - M${activeMicro.lastWorkoutMicroIndex + 1}`}
+                          <span className="text-text-muted">Próximo entreno: </span>
+                          <span className="text-primary font-medium">
+                            {activeMicro.nextWorkout}
+                            {activeMicro.isNextMicroDifferent && ` - M${activeMicro.nextMicroIndex + 1}`}
                           </span>
                         </div>
                       )}
@@ -590,137 +883,51 @@ export default function StudentDashboard() {
           </motion.div>
         )}
 
-        {/* Quick Access Cards */}
+        {/* Quick Access Cards - Solo los que NO están en el menú inferior */}
         <div className="space-y-3">
           <h2 className="text-sm font-medium text-text-muted px-1">Accesos rápidos</h2>
 
-          {/* Routine Card - Only if no active micro */}
-          {!activeMicro && (
+          <div className="grid grid-cols-2 gap-3">
+            {/* Meal Plan Card */}
             <motion.div>
               <Card
                 className="bg-surface/80 border-border cursor-pointer touch-feedback overflow-hidden"
-                onClick={() => router.push("/student/routine")}
+                onClick={() => router.push("/student/meal-plan")}
               >
                 <CardContent className="p-4">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-primary-hover flex items-center justify-center shadow-lg">
-                      <Dumbbell className="w-6 h-6 text-black" />
+                  <div className="flex items-center gap-2">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center shadow-lg flex-shrink-0">
+                      <ClipboardList className="w-4 h-4 text-white" />
                     </div>
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-text">Mi Rutina</h3>
-                      <p className="text-sm text-text-muted">Ver entrenamiento de hoy</p>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-text text-xs leading-tight">Plan de Alimentación</h3>
                     </div>
-                    <ArrowRight className="w-5 h-5 text-text-muted" />
+                    <ArrowRight className="w-4 h-4 text-text-muted flex-shrink-0" />
                   </div>
                 </CardContent>
               </Card>
             </motion.div>
-          )}
 
-          {/* Nutrition Card */}
-          <motion.div>
-            <Card
-              className="bg-surface/80 border-border cursor-pointer touch-feedback overflow-hidden"
-              onClick={() => router.push("/student/nutrition")}
-            >
-              <CardContent className="p-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-accent to-success flex items-center justify-center shadow-lg">
-                    <Utensils className="w-6 h-6 text-black" />
+            {/* Cardio Card */}
+            <motion.div>
+              <Card
+                className="bg-surface/80 border-border cursor-pointer touch-feedback overflow-hidden"
+                onClick={() => router.push("/student/cardio")}
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-500 to-emerald-500 flex items-center justify-center shadow-lg flex-shrink-0">
+                      <Timer className="w-4 h-4 text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-text text-xs leading-tight">Cardio</h3>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-text-muted flex-shrink-0" />
                   </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-text">Nutrición</h3>
-                    <p className="text-sm text-text-muted">Registrar comidas</p>
-                  </div>
-                  <ArrowRight className="w-5 h-5 text-text-muted" />
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* Meal Plan Card */}
-          <motion.div>
-            <Card
-              className="bg-surface/80 border-border cursor-pointer touch-feedback overflow-hidden"
-              onClick={() => router.push("/student/meal-plan")}
-            >
-              <CardContent className="p-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center shadow-lg">
-                    <ClipboardList className="w-6 h-6 text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-text">Plan de Alimentación</h3>
-                    <p className="text-sm text-text-muted">Guía del coach</p>
-                  </div>
-                  <ArrowRight className="w-5 h-5 text-text-muted" />
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* Progress Card */}
-          <motion.div>
-            <Card
-              className="bg-surface/80 border-border cursor-pointer touch-feedback overflow-hidden"
-              onClick={() => router.push("/student/progress")}
-            >
-              <CardContent className="p-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-info to-blue-400 flex items-center justify-center shadow-lg">
-                    <Target className="w-6 h-6 text-black" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-text">Mi Progreso</h3>
-                    <p className="text-sm text-text-muted">Gráficos y estadísticas</p>
-                  </div>
-                  <ArrowRight className="w-5 h-5 text-text-muted" />
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* Cardio Card */}
-          <motion.div>
-            <Card
-              className="bg-surface/80 border-border cursor-pointer touch-feedback overflow-hidden"
-              onClick={() => router.push("/student/cardio")}
-            >
-              <CardContent className="p-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-500 to-emerald-500 flex items-center justify-center shadow-lg">
-                    <Timer className="w-6 h-6 text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-text">Cardio</h3>
-                    <p className="text-sm text-text-muted">Pasos, actividades y cronómetro</p>
-                  </div>
-                  <ArrowRight className="w-5 h-5 text-text-muted" />
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* Training History Card */}
-          <motion.div>
-            <Card
-              className="bg-surface/80 border-border cursor-pointer touch-feedback overflow-hidden"
-              onClick={() => router.push("/student/history")}
-            >
-              <CardContent className="p-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg">
-                    <History className="w-6 h-6 text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-text">Mi Historial</h3>
-                    <p className="text-sm text-text-muted">Entrenamientos y progreso por ejercicio</p>
-                  </div>
-                  <ArrowRight className="w-5 h-5 text-text-muted" />
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </div>
         </div>
 
         {/* Steps vs Weight Correlation Chart - Lazy loaded */}
